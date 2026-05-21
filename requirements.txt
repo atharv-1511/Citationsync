@@ -1,0 +1,23 @@
+# Backend Framework
+Flask==2.3.2
+Flask-SQLAlchemy==3.0.5
+Flask-CORS==4.0.0
+psycopg2-binary==2.9.9
+
+# Database
+SQLAlchemy==2.0.21
+
+# Data Processing
+pandas==2.2.2
+openpyxl==3.1.2
+python-dateutil==2.8.2
+
+# AWS
+boto3==1.28.85
+
+# Utilities
+python-dotenv==1.0.0
+click==8.1.6
+
+# Development
+Werkzeug==2.3.7

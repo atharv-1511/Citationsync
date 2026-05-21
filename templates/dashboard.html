@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - CitationSync{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Dashboard</h2>
+    <p style="color: #666; margin-top: 10px;">Overall statistics and citation tracking overview.</p>
+</div>
+
+<div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>Loading dashboard data...</p>
+</div>
+
+<div id="dashboard-content" style="display: none;">
+    <!-- Statistics Grid -->
+    <div class="grid">
+        <div class="stat-box">
+            <h3 id="stat-dealers">0</h3>
+            <p>Total Cafes</p>
+        </div>
+        <div class="stat-box">
+            <h3 id="stat-directories">0</h3>
+            <p>Backlink Directories</p>
+        </div>
+        <div class="stat-box">
+            <h3 id="stat-citations">0</h3>
+            <p>Total Citations Built</p>
+        </div>
+        <div class="stat-box">
+            <h3 id="stat-avg">0</h3>
+            <p>Avg Citations/Cafe</p>
+        </div>
+    </div>
+
+    <!-- All Dealers -->
+    <div class="card" style="margin-top: 30px;">
+        <h3>All Cafes</h3>
+        <div id="all-dealers" style="margin-top: 15px;"></div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        loadDashboard();
+    });
+
+    function loadDashboard() {
+        fetch('/api/citations/stats')
+            .then(r => r.json())
+            .then(stats => displayStats(stats))
+            .catch(error => console.error('Error loading stats:', error));
+            
+        loadDealers(1);
+    }
+
+    function loadDealers(page) {
+        fetch('/api/dealers?page=' + page)
+            .then(r => r.json())
+            .then(dealers => {
+                displayAllDealers(dealers);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('dashboard-content').style.display = 'block';
+            })
+            .catch(error => {
+                console.error('Error loading dealers:', error);
+                document.getElementById('loading').innerHTML = `
+                    <div class="alert alert-error">Error loading dashboard: ${error.message}</div>
+                `;
+            });
+    }
+
+    function displayStats(stats) {
+        document.getElementById('stat-dealers').textContent = stats.total_dealers;
+        document.getElementById('stat-directories').textContent = stats.total_directories;
+        document.getElementById('stat-citations').textContent = stats.total_citations;
+        document.getElementById('stat-avg').textContent = stats.avg_citations_per_dealer;
+    }
+
+    function displayAllDealers(data) {
+        const container = document.getElementById('all-dealers');
+        
+        if (data.dealers.length === 0) {
+            container.innerHTML = '<p style="color: #999;">No dealers found.</p>';
+            return;
+        }
+
+        let html = '<table><thead><tr><th>Cafe ID</th><th>Cafe Name</th><th>Total Citations</th><th>This Month</th></tr></thead><tbody>';
+        
+        data.dealers.forEach(dealer => {
+            html += `
+                <tr>
+                    <td><strong>${dealer.id}</strong></td>
+                    <td><a href="/dealer?id=${dealer.id}" onclick="fillDealerId('${dealer.id}'); return false;">${dealer.name}</a></td>
+                    <td>${dealer.citation_count}</td>
+                    <td>${dealer.recent_months}</td>
+                </tr>
+            `;
+        });
+        
+        html += '</tbody></table>';
+        if (data.pages > 1) {
+            html += `<div style="margin-top: 15px; display: flex; align-items: center; gap: 15px;">`;
+            if (data.current_page > 1) {
+                html += `<button onclick="loadDealers(${data.current_page - 1})" style="padding: 8px 15px; font-size: 0.9em; width: auto;">Previous</button>`;
+            }
+            html += `<span style="color: #666; font-weight: 500;">Page ${data.current_page} of ${data.pages}</span>`;
+            if (data.current_page < data.pages) {
+                html += `<button onclick="loadDealers(${data.current_page + 1})" style="padding: 8px 15px; font-size: 0.9em; width: auto;">Next</button>`;
+            }
+            html += `</div>`;
+        }
+        
+        container.innerHTML = html;
+    }
+
+    function fillDealerId(dealerId) {
+        // Store for potential use
+        console.log('Selected dealer:', dealerId);
+    }
+</script>
+{% endblock %}

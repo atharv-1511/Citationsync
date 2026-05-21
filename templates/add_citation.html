@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% block title %}Add Citation - CitationSync{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Add New Citation</h2>
+    <p style="color: #666; margin-top: 10px;">Record a new citation that has been built for a cafe.</p>
+    {% if current_user %}
+    <p style="color: #666; margin-top: 10px; font-size: 0.95em;">Signed in as {{ current_user.full_name }}</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="form-group">
+        <label for="dealer-id">Cafe ID:</label>
+        <input type="text" id="dealer-id" placeholder="Enter cafe ID" required>
+    </div>
+
+    <div id="dealer-details" style="display: none; margin-bottom: 20px;">
+        <p><strong>Cafe Name:</strong> <span id="dealer-name"></span></p>
+        <p><strong>Total Citations Built:</strong> <span id="total-citations"></span></p>
+    </div>
+
+    <div id="directory-loading" style="display: none; margin-bottom: 20px;">
+        <p style="color: #666; font-style: italic;">Loading available directories...</p>
+    </div>
+
+    <div id="directory-select-container" style="display: none;">
+        <div class="form-group">
+            <label for="directory-id">Select Directory to Add:</label>
+            <select id="directory-id" required>
+                <option value="">-- Select a directory --</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="notes">Notes (Optional):</label>
+            <textarea id="notes" placeholder="Add any notes about this citation" rows="3"></textarea>
+        </div>
+
+        <button onclick="addCitation()">Add Citation</button>
+    </div>
+</div>
+
+<div id="success-container" style="display: none;">
+    <div class="alert alert-success" id="success-message"></div>
+    <button onclick="resetForm()">Add Another Citation</button>
+</div>
+
+<div id="error-container" style="display: none;">
+    <div class="alert alert-error" id="error-message"></div>
+</div>
+
+<script>
+    let allDirectories = [];
+
+    // Load all directories on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        fetch('/api/directories')
+            .then(response => response.json())
+            .then(data => {
+                allDirectories = data.directories;
+            });
+    });
+
+    // Lookup dealer when ID changes
+    document.getElementById('dealer-id').addEventListener('change', function() {
+        const dealerId = this.value.trim();
+        
+        if (!dealerId) {
+            document.getElementById('dealer-details').style.display = 'none';
+            document.getElementById('directory-select-container').style.display = 'none';
+            return;
+        }
+
+        document.getElementById('directory-loading').style.display = 'block';
+        
+        fetch(`/api/dealer/${dealerId}`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('directory-loading').style.display = 'none';
+                
+                if (data.error) {
+                    document.getElementById('error-message').textContent = `Cafe not found: ${data.error}`;
+                    document.getElementById('error-container').style.display = 'block';
+                    document.getElementById('dealer-details').style.display = 'none';
+                    document.getElementById('directory-select-container').style.display = 'none';
+                    return;
+                }
+
+                document.getElementById('dealer-name').textContent = data.name;
+                document.getElementById('total-citations').textContent = data.total_citations;
+                document.getElementById('dealer-details').style.display = 'block';
+                document.getElementById('error-container').style.display = 'none';
+
+                loadAvailableDirectories(dealerId);
+            })
+            .catch(error => {
+                document.getElementById('directory-loading').style.display = 'none';
+                document.getElementById('error-message').textContent = 'Error loading dealer: ' + error.message;
+                document.getElementById('error-container').style.display = 'block';
+            });
+    });
+
+    function loadAvailableDirectories(dealerId) {
+        document.getElementById('directory-loading').style.display = 'block';
+        
+        fetch(`/api/dealer/${dealerId}/suggestions`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('directory-loading').style.display = 'none';
+                
+                const selectElement = document.getElementById('directory-id');
+                selectElement.innerHTML = '<option value="">-- Select a directory --</option>';
+                
+                if (data.suggestions.length === 0) {
+                    document.getElementById('error-message').textContent = data.message;
+                    document.getElementById('error-container').style.display = 'block';
+                    document.getElementById('directory-select-container').style.display = 'none';
+                    return;
+                }
+
+                data.suggestions.forEach(suggestion => {
+                    const option = document.createElement('option');
+                    option.value = suggestion.id;
+                    option.textContent = suggestion.name;
+                    selectElement.appendChild(option);
+                });
+
+                document.getElementById('error-container').style.display = 'none';
+                document.getElementById('directory-select-container').style.display = 'block';
+            })
+            .catch(error => {
+                document.getElementById('directory-loading').style.display = 'none';
+                document.getElementById('error-message').textContent = 'Error loading suggestions: ' + error.message;
+                document.getElementById('error-container').style.display = 'block';
+            });
+    }
+
+    function addCitation() {
+        const dealerId = document.getElementById('dealer-id').value.trim();
+        const directoryId = document.getElementById('directory-id').value;
+        const notes = document.getElementById('notes').value.trim();
+
+        if (!dealerId || !directoryId) {
+            document.getElementById('error-message').textContent = 'Please select both cafe and directory';
+            document.getElementById('error-container').style.display = 'block';
+            return;
+        }
+
+        fetch('/api/citation/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                dealer_id: dealerId,
+                directory_id: parseInt(directoryId),
+                notes: notes
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error || !data.success) {
+                document.getElementById('error-message').textContent = data.error || 'Error adding citation';
+                document.getElementById('error-container').style.display = 'block';
+                document.getElementById('success-container').style.display = 'none';
+                return;
+            }
+
+            document.getElementById('error-container').style.display = 'none';
+            document.getElementById('success-message').innerHTML = `
+                <div style="width: 100%;">
+                    <h4 style="margin-bottom: 5px; color: #155724; font-size: 1.1em;">Citation added successfully!</h4>
+                    <p style="margin-bottom: 5px; color: #155724;"><strong>${data.citation.directory_name}</strong> for cafe <strong>${data.citation.dealer_id}</strong></p>
+                    <p style="font-size: 0.85em; opacity: 0.9; color: #155724;">Added by <strong>${data.citation.created_by || 'System'}</strong></p>
+                </div>
+            `;
+            document.getElementById('success-container').style.display = 'block';
+            document.getElementById('directory-select-container').style.display = 'none';
+            document.getElementById('dealer-details').style.display = 'none';
+        })
+        .catch(error => {
+            document.getElementById('error-message').textContent = 'Error adding citation: ' + error.message;
+            document.getElementById('error-container').style.display = 'block';
+        });
+    }
+
+    function resetForm() {
+        document.getElementById('dealer-id').value = '';
+        document.getElementById('directory-id').value = '';
+        document.getElementById('notes').value = '';
+        document.getElementById('success-container').style.display = 'none';
+        document.getElementById('dealer-details').style.display = 'none';
+        document.getElementById('directory-select-container').style.display = 'none';
+    }
+
+    // Allow Enter to add citation
+    document.getElementById('notes').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && e.ctrlKey) addCitation();
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}Find Cafes - CitationSync{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Find Cafe Information</h2>
+    <p style="color: #666; margin-top: 10px;">Enter a cafe ID to view citation history and see all available citations.</p>
+</div>
+
+<div class="card">
+    <div class="form-group">
+        <label for="dealer-id">Cafe ID:</label>
+        <input type="text" id="dealer-id" placeholder="Enter cafe ID (e.g., 20000)" required>
+    </div>
+    <button onclick="searchDealer()">Search Cafes</button>
+</div>
+
+<div id="result-container" style="display: none;">
+    <!-- Cafe Info -->
+    <div class="card" id="dealer-info">
+        <h3 id="dealer-name"></h3>
+        <p style="color: #666; margin-top: 10px;">
+            <strong>ID:</strong> <span id="dealer-id-display"></span> | 
+            <strong>Total Citations:</strong> <span id="total-citations"></span>
+        </p>
+    </div>
+
+    <!-- Citations Built -->
+    <div class="card">
+        <h3>Citations Built</h3>
+        <div id="citations-list" style="margin-top: 15px;"></div>
+    </div>
+
+    <!-- Available Citations -->
+    <div class="card">
+        <h3>Available Citations</h3>
+        <div id="suggestions-list" style="margin-top: 15px;"></div>
+    </div>
+</div>
+
+<div id="error-container" style="display: none;">
+    <div class="alert alert-error" id="error-message"></div>
+</div>
+
+<div id="loading" class="loading" style="display: none;">
+    <div class="spinner"></div>
+    <p>Loading cafe information...</p>
+</div>
+
+<script>
+    function searchDealer() {
+        const dealerId = document.getElementById('dealer-id').value.trim();
+        
+        if (!dealerId) {
+            showError('Please enter a cafe ID');
+            return;
+        }
+        
+        showLoading();
+        
+        Promise.all([
+            fetch(`/api/dealer/${dealerId}`).then(r => r.json()),
+            fetch(`/api/dealer/${dealerId}/suggestions`).then(r => r.json())
+        ])
+        .then(([dealerData, suggestionsData]) => {
+            if (dealerData.error) {
+                showError(dealerData.error);
+                return;
+            }
+            
+            hideLoading();
+            displayDealerInfo(dealerData);
+            displaySuggestions(suggestionsData);
+            document.getElementById('result-container').style.display = 'block';
+            document.getElementById('error-container').style.display = 'none';
+        })
+        .catch(error => {
+            showError('Error loading cafe information: ' + error.message);
+        });
+    }
+
+    function displayDealerInfo(dealer) {
+        document.getElementById('dealer-name').textContent = dealer.name;
+        document.getElementById('dealer-id-display').textContent = dealer.id;
+        document.getElementById('total-citations').textContent = dealer.total_citations;
+        
+        const citationsList = document.getElementById('citations-list');
+        
+        if (dealer.citations.length === 0) {
+            citationsList.innerHTML = '<p style="color: #999;">No citations built yet</p>';
+            return;
+        }
+        
+        let html = '<table><thead><tr><th>Citation</th><th>Built On</th><th>Added By</th><th>Status</th></tr></thead><tbody>';
+        
+        dealer.citations.forEach(citation => {
+            const status = citation.is_recent ? 
+                '<span class="badge badge-warning">Recent (6mo)</span>' : 
+                '<span class="badge badge-success">Available</span>';
+            
+            html += `
+                <tr>
+                    <td>${citation.directory_name}</td>
+                    <td>${citation.created_at}</td>
+                    <td>${citation.created_by || 'System'}</td>
+                    <td>${status}</td>
+                </tr>
+            `;
+        });
+        
+        html += '</tbody></table>';
+        citationsList.innerHTML = html;
+    }
+
+    function displaySuggestions(data) {
+        const suggestionsList = document.getElementById('suggestions-list');
+        
+        if (data.suggestions.length === 0) {
+            suggestionsList.innerHTML = `
+                <div class="alert alert-info">
+                    ${data.message}
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '<table><thead><tr><th>Directory Name</th><th>URL</th></tr></thead><tbody>';
+        
+        data.suggestions.forEach(suggestion => {
+            html += `
+                <tr>
+                    <td><strong>${suggestion.name}</strong></td>
+                    <td><a href="${suggestion.url}" target="_blank" rel="noopener noreferrer">${suggestion.url}</a></td>
+                </tr>
+            `;
+        });
+        
+        html += '</tbody></table>';
+        html += `<p style="color: #666; margin-top: 15px; font-size: 0.9em;">
+                    ${data.available_count} total directories available for this cafe
+                </p>`;
+        
+        suggestionsList.innerHTML = html;
+    }
+
+    function showError(message) {
+        hideLoading();
+        document.getElementById('error-message').textContent = message;
+        document.getElementById('error-container').style.display = 'block';
+        document.getElementById('result-container').style.display = 'none';
+    }
+
+    function showLoading() {
+        document.getElementById('loading').style.display = 'block';
+        document.getElementById('result-container').style.display = 'none';
+        document.getElementById('error-container').style.display = 'none';
+    }
+
+    function hideLoading() {
+        document.getElementById('loading').style.display = 'none';
+    }
+
+    // Allow Enter key to search
+    document.getElementById('dealer-id').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') searchDealer();
+    });
+</script>
+{% endblock %}

@@ -448,6 +448,12 @@ def register_routes(app):
         """Handle 500 errors"""
         return jsonify({'error': 'Internal server error'}), 500
 
+# Expose a top-level WSGI `app` for hosting platforms (Vercel, Gunicorn, etc.).
+# This makes `from app import app` work and satisfies Vercel's requirement.
+# Use the `FLASK_ENV` environment variable to control the config (defaults to 'production').
+app = create_app(os.environ.get('FLASK_ENV', 'production'))
+
 if __name__ == '__main__':
-    app = create_app()
+    # When run locally, enable debug with the development config by default.
+    app = create_app('development')
     app.run(debug=True, host='0.0.0.0', port=5000)

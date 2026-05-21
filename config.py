@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
 
 
 def _normalize_database_url(url):
@@ -12,6 +12,16 @@ def _normalize_database_url(url):
         url = url.replace('postgresql://', 'postgresql+psycopg2://', 1)
 
     parsed_url = urlparse(url)
+    if parsed_url.hostname is None and '@' in url and '://' in url:
+        scheme, remainder = url.split('://', 1)
+        credentials, host_part = remainder.rsplit('@', 1)
+        if ':' in credentials:
+            username, password = credentials.split(':', 1)
+            encoded_user = quote(username, safe='')
+            encoded_password = quote(password, safe='')
+            url = f'{scheme}://{encoded_user}:{encoded_password}@{host_part}'
+            parsed_url = urlparse(url)
+
     if parsed_url.hostname and 'supabase.co' in parsed_url.hostname:
         query_params = dict(parse_qsl(parsed_url.query, keep_blank_values=True))
         query_params.setdefault('sslmode', 'require')
@@ -35,6 +45,9 @@ class Config:
     ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'raskaratharv28@gmail.com')
     ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'Grayrock@04')
     ADMIN_FULL_NAME = os.getenv('ADMIN_FULL_NAME', 'Atharv Raskar')
+    EMPLOYEE_EMAIL = os.getenv('EMPLOYEE_EMAIL', 'sakshi@example.com')
+    EMPLOYEE_PASSWORD = os.getenv('EMPLOYEE_PASSWORD', 'ChangeMe123!')
+    EMPLOYEE_FULL_NAME = os.getenv('EMPLOYEE_FULL_NAME', 'Sakshi')
     DEFAULT_USER_PASSWORD = os.getenv('DEFAULT_USER_PASSWORD', 'ChangeMe123!')
     
     # Pagination

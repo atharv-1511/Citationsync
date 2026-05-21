@@ -55,24 +55,31 @@ def admin_required(view):
 
 
 def seed_default_users(app):
-    """Create the default admin account if it does not exist yet."""
+    """Create the default admin and employee accounts if they do not exist yet."""
     admin_email = app.config['ADMIN_EMAIL'].strip().lower()
-    if not admin_email:
-        return
+    if admin_email and not User.query.filter_by(email=admin_email).first():
+        admin = User(
+            email=admin_email,
+            full_name=app.config['ADMIN_FULL_NAME'],
+            role='admin',
+            active=True,
+        )
+        admin.set_password(app.config['ADMIN_PASSWORD'])
+        db.session.add(admin)
 
-    admin = User.query.filter_by(email=admin_email).first()
-    if admin:
-        return
+    employee_email = app.config.get('EMPLOYEE_EMAIL', '').strip().lower()
+    if employee_email and not User.query.filter_by(email=employee_email).first():
+        employee = User(
+            email=employee_email,
+            full_name=app.config.get('EMPLOYEE_FULL_NAME', 'Sakshi'),
+            role='employee',
+            active=True,
+        )
+        employee.set_password(app.config.get('EMPLOYEE_PASSWORD', app.config.get('DEFAULT_USER_PASSWORD')))
+        db.session.add(employee)
 
-    admin = User(
-        email=admin_email,
-        full_name=app.config['ADMIN_FULL_NAME'],
-        role='admin',
-        active=True,
-    )
-    admin.set_password(app.config['ADMIN_PASSWORD'])
-    db.session.add(admin)
-    db.session.commit()
+    if admin_email or employee_email:
+        db.session.commit()
 
 
 def ensure_sqlite_schema(app):
@@ -131,9 +138,12 @@ def create_app(config_name='development'):
         }
 
     with app.app_context():
-        db.create_all()
-        seed_default_users(app)
-        ensure_sqlite_schema(app)
+        try:
+            db.create_all()
+            seed_default_users(app)
+            ensure_sqlite_schema(app)
+        except Exception as exc:
+            app.logger.warning('Database initialization skipped: %s', exc)
     
     # Register blueprints and routes
     register_routes(app)

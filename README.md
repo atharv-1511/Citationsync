@@ -120,3 +120,7 @@ Exports citation data to Excel
 2. Run `python scripts/import_data.py`
 3. Launch `python app.py`
 4. Test with dealer ID 20000 (Brew Haven Cafe)
+
+## Cleanup Note
+
+Removed several legacy documentation files (`FINAL_CHECKLIST.md`, `PROJECT_INDEX.md`, `SETUP.md`, `TEAM_GUIDE.md`) to keep the repository focused. The project favicon was consolidated to `static/favicon.png` and the original `Favicon/` source folder was removed.

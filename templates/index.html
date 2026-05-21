@@ -59,12 +59,12 @@
             .then(status => {
                 const banner = document.getElementById('db-banner');
                 banner.style.display = 'block';
-                if (status.ok && status.database && status.database.startsWith('postgresql')) {
+                if (status.ok && status.database_env_present && status.database && status.database.startsWith('postgresql')) {
                     banner.innerHTML = '<strong>Database connected:</strong> Supabase PostgreSQL is active.';
                     banner.style.borderLeft = '6px solid #2e7d32';
                     banner.style.background = '#f1f8f4';
                 } else {
-                    banner.innerHTML = '<strong>Database fallback:</strong> The app is not connected to Supabase yet. Set <code>DATABASE_URL</code> in Vercel.';
+                    banner.innerHTML = '<strong>Database fallback:</strong> Vercel is not passing a Supabase <code>DATABASE_URL</code> to the app yet.';
                     banner.style.borderLeft = '6px solid #d32f2f';
                     banner.style.background = '#fff4f4';
                 }

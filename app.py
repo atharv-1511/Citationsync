@@ -412,18 +412,32 @@ def register_routes(app):
     @app.route('/api/db-status', methods=['GET'])
     def db_status():
         """Public health check for database connectivity."""
+        configured_uri = app.config['SQLALCHEMY_DATABASE_URI']
+        env_database_url = os.getenv('DATABASE_URL')
         try:
             result = db.session.execute(text('SELECT 1')).scalar()
             return jsonify({
                 'ok': True,
-                'database': app.config['SQLALCHEMY_DATABASE_URI'],
+                'database': configured_uri,
+                'database_env_present': bool(env_database_url),
+                'database_env_is_supabase': bool(env_database_url and 'supabase.co' in env_database_url),
+                'runtime': {
+                    'flask_env': os.getenv('FLASK_ENV', 'production'),
+                    'vercel': bool(os.getenv('VERCEL')),
+                },
                 'result': int(result) if result is not None else None,
             })
         except Exception as exc:
             app.logger.warning('Database status check failed: %s', exc)
             return jsonify({
                 'ok': False,
-                'database': app.config['SQLALCHEMY_DATABASE_URI'],
+                'database': configured_uri,
+                'database_env_present': bool(env_database_url),
+                'database_env_is_supabase': bool(env_database_url and 'supabase.co' in env_database_url),
+                'runtime': {
+                    'flask_env': os.getenv('FLASK_ENV', 'production'),
+                    'vercel': bool(os.getenv('VERCEL')),
+                },
                 'error': str(exc),
             }), 503
     

@@ -85,9 +85,10 @@ class Config:
     ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'raskaratharv28@gmail.com')
     ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'Grayrock@04')
     ADMIN_FULL_NAME = os.getenv('ADMIN_FULL_NAME', 'Atharv Raskar')
-    EMPLOYEE_EMAIL = os.getenv('EMPLOYEE_EMAIL', 'sakshi@example.com')
-    EMPLOYEE_PASSWORD = os.getenv('EMPLOYEE_PASSWORD', 'sakashi123!')
-    EMPLOYEE_FULL_NAME = os.getenv('EMPLOYEE_FULL_NAME', 'Sakshi')
+    # Do not include hard-coded employee credentials here. Set via environment in production.
+    EMPLOYEE_EMAIL = os.getenv('EMPLOYEE_EMAIL', '')
+    EMPLOYEE_PASSWORD = os.getenv('EMPLOYEE_PASSWORD', '')
+    EMPLOYEE_FULL_NAME = os.getenv('EMPLOYEE_FULL_NAME', '')
     DEFAULT_USER_PASSWORD = os.getenv('DEFAULT_USER_PASSWORD', 'ChangeMe123!')
     
     # Pagination

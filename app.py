@@ -72,11 +72,13 @@ def seed_default_users(app):
     if employee_email and not User.query.filter_by(email=employee_email).first():
         employee = User(
             email=employee_email,
-            full_name=app.config.get('EMPLOYEE_FULL_NAME', 'Sakshi'),
+            full_name=app.config.get('EMPLOYEE_FULL_NAME') or '',
             role='employee',
             active=True,
         )
-        employee.set_password(app.config.get('EMPLOYEE_PASSWORD', app.config.get('DEFAULT_USER_PASSWORD')))
+        # Use EMPLOYEE_PASSWORD if provided, otherwise fall back to DEFAULT_USER_PASSWORD
+        emp_pass = app.config.get('EMPLOYEE_PASSWORD') or app.config.get('DEFAULT_USER_PASSWORD')
+        employee.set_password(emp_pass)
         db.session.add(employee)
 
     if admin_email or employee_email:

@@ -86,7 +86,7 @@ class Config:
     ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'Grayrock@04')
     ADMIN_FULL_NAME = os.getenv('ADMIN_FULL_NAME', 'Atharv Raskar')
     EMPLOYEE_EMAIL = os.getenv('EMPLOYEE_EMAIL', 'sakshi@example.com')
-    EMPLOYEE_PASSWORD = os.getenv('EMPLOYEE_PASSWORD', 'ChangeMe123!')
+    EMPLOYEE_PASSWORD = os.getenv('EMPLOYEE_PASSWORD', 'sakashi123!')
     EMPLOYEE_FULL_NAME = os.getenv('EMPLOYEE_FULL_NAME', 'Sakshi')
     DEFAULT_USER_PASSWORD = os.getenv('DEFAULT_USER_PASSWORD', 'ChangeMe123!')
     

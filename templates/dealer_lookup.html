@@ -60,8 +60,18 @@
         showLoading();
         
         Promise.all([
-            fetch(`/api/dealer/${dealerId}`).then(r => r.json()),
-            fetch(`/api/dealer/${dealerId}/suggestions`).then(r => r.json())
+            fetch(`/api/dealer/${dealerId}`, { credentials: 'same-origin' }).then(r => {
+                if (!r.ok) {
+                    throw new Error('Failed to load dealer');
+                }
+                return r.json();
+            }),
+            fetch(`/api/dealer/${dealerId}/suggestions`, { credentials: 'same-origin' }).then(r => {
+                if (!r.ok) {
+                    throw new Error('Failed to load suggestions');
+                }
+                return r.json();
+            })
         ])
         .then(([dealerData, suggestionsData]) => {
             if (dealerData.error) {

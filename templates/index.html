@@ -12,6 +12,8 @@
     </p>
 </div>
 
+<div id="db-banner" class="card" style="display:none; margin-top: 20px;"></div>
+
 <div class="grid">
     <div class="stat-box" id="stat-dealers">
         <h3>0</h3>
@@ -52,12 +54,37 @@
 <script>
     // Load stats on page load
     document.addEventListener('DOMContentLoaded', function() {
-        fetch('/api/citations/stats')
+        fetch('/api/db-status')
             .then(response => response.json())
+            .then(status => {
+                const banner = document.getElementById('db-banner');
+                banner.style.display = 'block';
+                if (status.ok && status.database && status.database.startsWith('postgresql')) {
+                    banner.innerHTML = '<strong>Database connected:</strong> Supabase PostgreSQL is active.';
+                    banner.style.borderLeft = '6px solid #2e7d32';
+                    banner.style.background = '#f1f8f4';
+                } else {
+                    banner.innerHTML = '<strong>Database fallback:</strong> The app is not connected to Supabase yet. Set <code>DATABASE_URL</code> in Vercel.';
+                    banner.style.borderLeft = '6px solid #d32f2f';
+                    banner.style.background = '#fff4f4';
+                }
+            })
+            .catch(error => console.error('Error loading db status:', error));
+
+        fetch('/api/citations/stats', { credentials: 'same-origin' })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to load stats');
+                }
+                return response.json();
+            })
             .then(data => {
                 document.getElementById('stat-dealers').innerHTML = `<h3>${data.total_dealers}</h3><p>Total Cafes</p>`;
                 document.getElementById('stat-directories').innerHTML = `<h3>${data.total_directories}</h3><p>Backlink Directories</p>`;
                 document.getElementById('stat-citations').innerHTML = `<h3>${data.total_citations}</h3><p>Citations Built</p>`;
+            })
+            .catch(error => {
+                console.error('Error loading stats:', error);
             });
     });
 </script>

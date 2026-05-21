@@ -8,6 +8,8 @@
     <p style="color: #666; margin-top: 10px;">Overall statistics and citation tracking overview.</p>
 </div>
 
+<div id="db-banner" class="card" style="display:none; margin-top: 20px;"></div>
+
 <div id="loading" class="loading">
     <div class="spinner"></div>
     <p>Loading dashboard data...</p>
@@ -47,8 +49,30 @@
     });
 
     function loadDashboard() {
-        fetch('/api/citations/stats')
-            .then(r => r.json())
+        fetch('/api/db-status')
+            .then(response => response.json())
+            .then(status => {
+                const banner = document.getElementById('db-banner');
+                banner.style.display = 'block';
+                if (status.ok && status.database && status.database.startsWith('postgresql')) {
+                    banner.innerHTML = '<strong>Database connected:</strong> Supabase PostgreSQL is active.';
+                    banner.style.borderLeft = '6px solid #2e7d32';
+                    banner.style.background = '#f1f8f4';
+                } else {
+                    banner.innerHTML = '<strong>Database fallback:</strong> The dashboard is reading from local SQLite. Set <code>DATABASE_URL</code> in Vercel.';
+                    banner.style.borderLeft = '6px solid #d32f2f';
+                    banner.style.background = '#fff4f4';
+                }
+            })
+            .catch(error => console.error('Error loading db status:', error));
+
+        fetch('/api/citations/stats', { credentials: 'same-origin' })
+            .then(r => {
+                if (!r.ok) {
+                    throw new Error('Failed to load stats');
+                }
+                return r.json();
+            })
             .then(stats => displayStats(stats))
             .catch(error => console.error('Error loading stats:', error));
             
@@ -56,8 +80,13 @@
     }
 
     function loadDealers(page) {
-        fetch('/api/dealers?page=' + page)
-            .then(r => r.json())
+        fetch('/api/dealers?page=' + page, { credentials: 'same-origin' })
+            .then(r => {
+                if (!r.ok) {
+                    throw new Error('Failed to load dealers');
+                }
+                return r.json();
+            })
             .then(dealers => {
                 displayAllDealers(dealers);
                 document.getElementById('loading').style.display = 'none';

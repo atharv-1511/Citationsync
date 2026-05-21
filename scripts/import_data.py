@@ -17,7 +17,7 @@ from models import Dealer, BacklinkDirectory, Citation
 DATA_DIR = PROJECT_ROOT / 'Data'
 
 
-def read_local_excel(file_name, sheet_name=None):
+def read_local_excel(file_name, sheet_name=None, **read_kwargs):
     """Read an Excel file from the local Data directory."""
     file_path = DATA_DIR / file_name
     if not file_path.exists():
@@ -25,7 +25,7 @@ def read_local_excel(file_name, sheet_name=None):
         return None
 
     try:
-        df = pd.read_excel(file_path, sheet_name=sheet_name)
+        df = pd.read_excel(file_path, sheet_name=sheet_name, **read_kwargs)
         print(f"✓ Read {file_path}")
         return df
     except Exception as exc:
@@ -76,7 +76,7 @@ def import_dealers_and_citations():
     """Import dealers and their citation history from the local Excel file."""
     print("Importing dealers and citations from local Data/...")
 
-    df = read_local_excel('Cafe_Clients_Backlinks.xlsx', sheet_name='Cafe Backlinks')
+    df = read_local_excel('Cafe_Clients_Backlinks.xlsx', sheet_name='Cafe Backlinks', header=None)
     
     if df is None:
         print("Error: Could not read Cafe_Clients_Backlinks.xlsx from Data/!")
@@ -86,7 +86,7 @@ def import_dealers_and_citations():
         # First row contains dealer IDs, second contains names, rest are citations
         dealer_ids = df.iloc[0].values
         dealer_names = df.iloc[1].values
-        
+
         # Import dealers (skip NaN values)
         dealers_imported = 0
         citations_imported = 0

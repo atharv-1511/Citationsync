@@ -14,6 +14,10 @@
 
 <div id="db-banner" class="card" style="display:none; margin-top: 20px;"></div>
 
+<div id="stats-banner" class="card" style="margin-top: 20px; background: #fafbfe; border-left: 6px solid var(--accent-color);">
+    <strong>Live stats:</strong> <span id="stats-banner-text">Loading current database totals...</span>
+</div>
+
 <div class="grid">
     <div class="stat-box" id="stat-dealers">
         <h3>0</h3>
@@ -54,6 +58,8 @@
 <script>
     // Load stats on page load
     document.addEventListener('DOMContentLoaded', function() {
+        const statsBannerText = document.getElementById('stats-banner-text');
+
         fetch('/api/db-status')
             .then(response => response.json())
             .then(status => {
@@ -82,9 +88,11 @@
                 document.getElementById('stat-dealers').innerHTML = `<h3>${data.total_dealers}</h3><p>Total Cafes</p>`;
                 document.getElementById('stat-directories').innerHTML = `<h3>${data.total_directories}</h3><p>Backlink Directories</p>`;
                 document.getElementById('stat-citations').innerHTML = `<h3>${data.total_citations}</h3><p>Citations Built</p>`;
+                statsBannerText.textContent = `Updated just now. ${data.total_dealers} cafes, ${data.total_directories} directories, ${data.total_citations} citations.`;
             })
             .catch(error => {
                 console.error('Error loading stats:', error);
+                statsBannerText.textContent = 'Could not load live totals. Showing the last rendered values on the page.';
             });
     });
 </script>

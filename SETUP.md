@@ -6,14 +6,14 @@
 
 ## 🌐 Online Database + Sign In
 
-This version runs on AWS RDS PostgreSQL instead of local SQLite.
+This version runs on Supabase PostgreSQL instead of local SQLite.
 
-### AWS RDS Setup (Production)
+### Supabase Setup (Production)
 
 Set these environment variables before deploying:
 
 ```bash
-DATABASE_URL=postgresql+psycopg2://postgres:Grayrock04@database-citation-manager.civiomcuskqf.us-east-1.rds.amazonaws.com:5432/citations
+DATABASE_URL=postgresql+psycopg2://postgres:YOUR_SUPABASE_PASSWORD@db.YOUR_PROJECT_REF.supabase.co:5432/postgres?sslmode=require
 SECRET_KEY=your-secret-key-here-change-this
 ADMIN_EMAIL=raskaratharv28@gmail.com
 ADMIN_PASSWORD=Grayrock@04
@@ -25,29 +25,19 @@ The admin account is seeded automatically from `ADMIN_EMAIL` and `ADMIN_PASSWORD
 
 **Employee Management:** Employees are managed through your organization's email system. When an employee with an organization email signs in, they are automatically created in the system on first login and appear as regular employees.
 
-### AWS S3 Setup (Optional - For Cloud Storage)
+### Data Import (Local Excel Files)
 
-To store data files in AWS S3 instead of locally:
+Keep the Excel files in the local `Data/` folder and run the import script:
 
-1. Set AWS credentials as environment variables:
 ```powershell
-$env:AWS_ACCESS_KEY_ID="your-access-key-id"
-$env:AWS_SECRET_ACCESS_KEY="your-secret-access-key"
-$env:AWS_S3_BUCKET="citation-manager-data"
-$env:AWS_REGION="us-east-1"
+python scripts/import_data.py
 ```
 
-2. Run the S3 setup script:
-```powershell
-python scripts/setup_s3.py
-```
+After confirming the data is in Supabase, clean up the local files:
 
-3. After confirming files are in S3, clean up local files:
 ```powershell
 python scripts/cleanup.py
 ```
-
-**See [AWS_S3_SETUP.md](AWS_S3_SETUP.md) for detailed instructions.**
 
 ## 🚀 Quick Start
 

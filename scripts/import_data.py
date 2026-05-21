@@ -1,12 +1,11 @@
 """
-Data import script to load Excel data from AWS S3 into PostgreSQL database
+Data import script to load Excel data from local Excel files into PostgreSQL database.
 """
 import sys
 import pandas as pd
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from io import BytesIO
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -14,20 +13,34 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from app import create_app, db
 from models import Dealer, BacklinkDirectory, Citation
-from aws_storage import S3Storage
+
+DATA_DIR = PROJECT_ROOT / 'Data'
+
+
+def read_local_excel(file_name, sheet_name=None):
+    """Read an Excel file from the local Data directory."""
+    file_path = DATA_DIR / file_name
+    if not file_path.exists():
+        print(f"✗ Error: {file_name} not found in {DATA_DIR}")
+        return None
+
+    try:
+        df = pd.read_excel(file_path, sheet_name=sheet_name)
+        print(f"✓ Read {file_path}")
+        return df
+    except Exception as exc:
+        print(f"✗ Error reading {file_path}: {exc}")
+        return None
 
 
 def import_backlink_directories():
-    """Import backlink directories from S3"""
-    print("Importing backlink directories from S3...")
-    
-    storage = S3Storage()
-    
-    # Read directly from S3
-    df = storage.read_excel('data/Backlink_Directories.xlsx', sheet_name='Backlink Directories')
+    """Import backlink directories from the local Excel file."""
+    print("Importing backlink directories from local Data/...")
+
+    df = read_local_excel('Backlink_Directories.xlsx', sheet_name='Backlink Directories')
     
     if df is None:
-        print("Error: Could not read Backlink_Directories.xlsx from S3!")
+        print("Error: Could not read Backlink_Directories.xlsx from Data/!")
         return False
     
     try:
@@ -49,7 +62,7 @@ def import_backlink_directories():
         
         db.session.commit()
         count = BacklinkDirectory.query.count()
-        print(f"✓ Imported {count} backlink directories from S3")
+        print(f"✓ Imported {count} backlink directories from local Data/")
         return True
         
         
@@ -60,16 +73,13 @@ def import_backlink_directories():
 
 
 def import_dealers_and_citations():
-    """Import dealers and their citation history from S3 Excel file"""
-    print("Importing dealers and citations from S3...")
-    
-    storage = S3Storage()
-    
-    # Read directly from S3
-    df = storage.read_excel('data/Cafe_Clients_Backlinks.xlsx', sheet_name='Cafe Backlinks')
+    """Import dealers and their citation history from the local Excel file."""
+    print("Importing dealers and citations from local Data/...")
+
+    df = read_local_excel('Cafe_Clients_Backlinks.xlsx', sheet_name='Cafe Backlinks')
     
     if df is None:
-        print("Error: Could not read Cafe_Clients_Backlinks.xlsx from S3!")
+        print("Error: Could not read Cafe_Clients_Backlinks.xlsx from Data/!")
         return False
     
     try:
@@ -90,19 +100,30 @@ def import_dealers_and_citations():
             
             if pd.isna(dealer_name):
                 dealer_name = f"Dealer {dealer_id}"
+
+            dealer_name = str(dealer_name).strip()
+
+            if not dealer_name or dealer_name.lower() == 'nan':
+                dealer_name = dealer_id
+
+            if Dealer.query.filter_by(name=dealer_name).first() and not Dealer.query.filter_by(id=dealer_id).first():
+                dealer_name = dealer_id
             
             # Check if dealer exists
             existing_dealer = Dealer.query.filter_by(id=dealer_id).first()
             if not existing_dealer:
+                existing_dealer = Dealer.query.filter_by(name=dealer_name).first()
+
+            if existing_dealer:
+                dealer = existing_dealer
+            else:
                 dealer = Dealer(
                     id=dealer_id,
-                    name=str(dealer_name),
+                    name=dealer_name,
                     contact_info=None
                 )
                 db.session.add(dealer)
                 dealers_imported += 1
-            else:
-                dealer = existing_dealer
             
             db.session.flush()  # Flush to get the dealer in the session
             
@@ -131,7 +152,7 @@ def import_dealers_and_citations():
                 if not existing_citation:
                     # Create citation with a date offset (to simulate past citations)
                     # Assign random dates within last 6 months for demo purposes
-                    created_date = datetime.utcnow() - timedelta(days=int((row_idx - 2) * 10))
+                    created_date = datetime.now(timezone.utc) - timedelta(days=int((row_idx - 2) * 10))
                     
                     citation = Citation(
                         dealer_id=dealer_id,
@@ -146,8 +167,8 @@ def import_dealers_and_citations():
         total_dealers = Dealer.query.count()
         total_citations = Citation.query.count()
         
-        print(f"✓ Imported {dealers_imported} new dealers from S3 (Total: {total_dealers})")
-        print(f"✓ Imported {citations_imported} new citations from S3 (Total: {total_citations})")
+        print(f"✓ Imported {dealers_imported} new dealers from local Data/ (Total: {total_dealers})")
+        print(f"✓ Imported {citations_imported} new citations from local Data/ (Total: {total_citations})")
         return True
         
     except Exception as e:

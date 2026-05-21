@@ -12,7 +12,7 @@ A web-based platform to manage backlink citations for multiple dealers, preventi
 
 ## Solution
 A centralized platform with:
-- **Database Backend**: SQLite for storing dealer data and citation history
+- **Database Backend**: PostgreSQL on Supabase for storing dealer data and citation history
 - **REST API**: Flask-based API for querying and updating citation data
 - **Web UI**: Simple interface to look up dealers and record citations
 - **Smart Logic**: Automatically suggest available citations based on:
@@ -50,14 +50,17 @@ AI LB Prototype/
 pip install -r requirements.txt
 ```
 
-### 2. Import Data from Excel
+### 2. Configure Supabase and Import Data from Excel
+
+Set `DATABASE_URL` to your Supabase Postgres connection string. The app automatically adds `sslmode=require` for Supabase hosts.
+
 ```bash
 python scripts/import_data.py
 ```
 
 This will:
-- Read Backlink_Directories.xlsx and populate available citations
-- Read Cafe_Clients_Backlinks.xlsx and populate dealer data with history
+- Read `Data/Backlink_Directories.xlsx` and populate available citations
+- Read `Data/Cafe_Clients_Backlinks.xlsx` and populate dealer data with history
 
 ### 3. Run the Application
 ```bash

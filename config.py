@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 
 def _normalize_database_url(url):
@@ -7,6 +8,15 @@ def _normalize_database_url(url):
         return None
     if url.startswith('postgres://'):
         return url.replace('postgres://', 'postgresql+psycopg2://', 1)
+    if url.startswith('postgresql://'):
+        url = url.replace('postgresql://', 'postgresql+psycopg2://', 1)
+
+    parsed_url = urlparse(url)
+    if parsed_url.hostname and 'supabase.co' in parsed_url.hostname:
+        query_params = dict(parse_qsl(parsed_url.query, keep_blank_values=True))
+        query_params.setdefault('sslmode', 'require')
+        parsed_url = parsed_url._replace(query=urlencode(query_params))
+        return urlunparse(parsed_url)
     return url
 
 class Config:

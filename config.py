@@ -29,12 +29,21 @@ def _normalize_database_url(url):
         return urlunparse(parsed_url)
     return url
 
+
+def _default_database_url():
+    database_url = _normalize_database_url(os.getenv('DATABASE_URL'))
+    if database_url:
+        return database_url
+
+    if os.getenv('VERCEL') or os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
+        return 'sqlite:////tmp/backlinks.db'
+
+    return 'sqlite:///' + os.path.join(os.path.abspath(os.path.dirname(__file__)), 'database', 'backlinks.db')
+
 class Config:
     """Base configuration"""
     BASEDIR = os.path.abspath(os.path.dirname(__file__))
-    SQLALCHEMY_DATABASE_URI = _normalize_database_url(
-        os.getenv('DATABASE_URL')
-    ) or 'sqlite:///' + os.path.join(BASEDIR, 'database', 'backlinks.db')
+    SQLALCHEMY_DATABASE_URI = _default_database_url()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {'pool_pre_ping': True}
     

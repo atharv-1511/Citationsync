@@ -103,7 +103,11 @@ Database Summary:
 python app.py
 ```
 
-### 4. Sign In
+### 4. Test the Database Connection
+
+Open `http://localhost:5000/api/db-status` after starting the app. A healthy connection returns `ok: true` and `result: 1`.
+
+### 5. Sign In
 
 1. Open `http://localhost:5000/login`
 2. Sign in with the admin email and password from your environment variables
@@ -115,7 +119,7 @@ python app.py
  * Press CTRL+C to quit
 ```
 
-### 4. Access the Web Interface
+### 6. Access the Web Interface
 
 Open your browser and visit: **http://localhost:5000**
 

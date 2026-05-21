@@ -408,6 +408,24 @@ def register_routes(app):
             'dealers_needing_citations': len(dealers_needing),
             'dealers_status': dealers_needing
         })
+
+    @app.route('/api/db-status', methods=['GET'])
+    def db_status():
+        """Public health check for database connectivity."""
+        try:
+            result = db.session.execute(text('SELECT 1')).scalar()
+            return jsonify({
+                'ok': True,
+                'database': app.config['SQLALCHEMY_DATABASE_URI'],
+                'result': int(result) if result is not None else None,
+            })
+        except Exception as exc:
+            app.logger.warning('Database status check failed: %s', exc)
+            return jsonify({
+                'ok': False,
+                'database': app.config['SQLALCHEMY_DATABASE_URI'],
+                'error': str(exc),
+            }), 503
     
     @app.route('/api/dealers', methods=['GET'])
     @login_required

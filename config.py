@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
+import socket
 
 
 def _normalize_database_url(url):
@@ -12,6 +13,36 @@ def _normalize_database_url(url):
         url = url.replace('postgresql://', 'postgresql+psycopg2://', 1)
 
     parsed_url = urlparse(url)
+    # Optionally prefer IPv4 addresses for environments without IPv6 egress.
+    try_ipv4 = os.getenv('FORCE_IPV4', '').lower() in ('1', 'true', 'yes')
+    if try_ipv4 and parsed_url.hostname:
+        try:
+            infos = socket.getaddrinfo(parsed_url.hostname, None, family=socket.AF_INET)
+            if infos:
+                # Use the first IPv4 address found
+                ipv4 = infos[0][4][0]
+                # Rebuild the netloc keeping credentials and port
+                netloc = parsed_url.netloc
+                if '@' in netloc:
+                    creds, hostpart = netloc.rsplit('@', 1)
+                    # hostpart may include :port
+                    if ':' in hostpart:
+                        _, port = hostpart.split(':', 1)
+                        netloc = f"{creds}@{ipv4}:{port}"
+                    else:
+                        netloc = f"{creds}@{ipv4}"
+                else:
+                    # no credentials
+                    if parsed_url.port:
+                        netloc = f"{ipv4}:{parsed_url.port}"
+                    else:
+                        netloc = ipv4
+
+                parsed_url = parsed_url._replace(netloc=netloc)
+                url = urlunparse(parsed_url)
+        except Exception:
+            # If resolution fails, fall back to the original URL
+            pass
     if parsed_url.hostname is None and '@' in url and '://' in url:
         scheme, remainder = url.split('://', 1)
         credentials, host_part = remainder.rsplit('@', 1)

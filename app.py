@@ -318,6 +318,51 @@ def register_routes(app):
             flash('Unable to delete user; user may be referenced elsewhere.', 'error')
 
         return redirect(url_for('admin_page'))
+
+    # JSON API endpoints for AJAX-powered admin UI
+    @app.route('/api/admin/users', methods=['POST'])
+    @login_required
+    @admin_required
+    def api_create_user():
+        data = request.get_json() or {}
+        email = (data.get('email') or request.form.get('email') or '').strip().lower()
+        full_name = (data.get('full_name') or request.form.get('full_name') or '').strip()
+        password = (data.get('password') or request.form.get('password') or '').strip()
+
+        if not email or not password or not full_name:
+            return jsonify({'success': False, 'error': 'Email, full name and password are required.'}), 400
+
+        configured_admin = app.config.get('ADMIN_EMAIL', '').strip().lower()
+        role = 'employee'
+        if email == configured_admin:
+            role = 'admin'
+
+        if User.query.filter_by(email=email).first():
+            return jsonify({'success': False, 'error': 'User already exists.'}), 409
+
+        user = User(email=email, full_name=full_name, role=role, active=True)
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+
+        return jsonify({'success': True, 'user': {'id': user.id, 'email': user.email, 'full_name': user.full_name, 'role': user.role, 'created_at': user.created_at.isoformat()}}), 201
+
+    @app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
+    @login_required
+    @admin_required
+    def api_delete_user(user_id):
+        user = User.query.get_or_404(user_id)
+        configured_admin = app.config.get('ADMIN_EMAIL', '').strip().lower()
+        if user.email and user.email.lower() == configured_admin:
+            return jsonify({'success': False, 'error': 'Cannot delete configured admin.'}), 403
+
+        try:
+            db.session.delete(user)
+            db.session.commit()
+            return jsonify({'success': True}), 200
+        except Exception:
+            db.session.rollback()
+            return jsonify({'success': False, 'error': 'Unable to delete user.'}), 500
     
     # ===================== API ENDPOINTS =====================
     

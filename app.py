@@ -9,6 +9,7 @@ from flask_cors import CORS
 from config import config
 from models import db, User, Dealer, BacklinkDirectory, Citation
 from sqlalchemy import inspect, text
+from werkzeug.exceptions import HTTPException
 import os
 from datetime import datetime, timedelta
 
@@ -485,9 +486,25 @@ def register_routes(app):
         """Handle 404 errors"""
         return jsonify({'error': 'Not found'}), 404
     
-    @app.errorhandler(500)
+    @app.errorhandler(Exception)
     def server_error(error):
-        """Handle 500 errors"""
+        """Handle unexpected errors with route-aware API details."""
+        if isinstance(error, HTTPException):
+            return error
+
+        app.logger.exception('Unhandled exception on %s %s', request.method, request.path)
+
+        if request.path.startswith('/api/'):
+            payload = {
+                'error': 'Internal server error',
+                'path': request.path,
+                'method': request.method,
+                'type': error.__class__.__name__,
+            }
+            if os.getenv('VERCEL') or os.getenv('FLASK_ENV', 'production') != 'production':
+                payload['detail'] = str(error)
+            return jsonify(payload), 500
+
         return jsonify({'error': 'Internal server error'}), 500
 
 # Expose a top-level WSGI `app` for hosting platforms (Vercel, Gunicorn, etc.).

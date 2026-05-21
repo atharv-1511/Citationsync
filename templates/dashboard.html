@@ -86,7 +86,7 @@
             return;
         }
 
-        let html = '<table><thead><tr><th>Cafe ID</th><th>Cafe Name</th><th>Total Citations</th><th>This Month</th></tr></thead><tbody>';
+        let html = '<div style="overflow-x: auto;"><table><thead><tr><th>Cafe ID</th><th>Cafe Name</th><th>Total Citations</th><th>This Month</th></tr></thead><tbody>';
         
         data.dealers.forEach(dealer => {
             html += `
@@ -99,7 +99,7 @@
             `;
         });
         
-        html += '</tbody></table>';
+        html += '</tbody></table></div>';
         if (data.pages > 1) {
             html += `<div style="margin-top: 15px; display: flex; align-items: center; gap: 15px;">`;
             if (data.current_page > 1) {

@@ -1,6 +1,6 @@
 """
-Cleanup script to remove unnecessary files after AWS S3 migration
-Run this only after confirming data is stored in S3 and database is on AWS RDS
+Cleanup script to remove unnecessary files after cloud migration
+Run this only after confirming data is stored in Supabase.
 """
 import os
 import shutil
@@ -14,8 +14,8 @@ def cleanup_local_files():
     
     # Files and folders to remove (after cloud migration)
     items_to_remove = [
-        'Data',  # Local data folder - now in S3
-        'database/backlinks.db',  # Old SQLite database - now in RDS
+        'Data',  # Local data folder - now in Supabase-backed workflow
+        'database/backlinks.db',  # Old SQLite database
     ]
     
     print("🗑️ Cleaning up unnecessary local files...")
@@ -51,8 +51,8 @@ def cleanup_local_files():
     print("\n" + "="*60)
     print("YOUR SYSTEM IS NOW CLOUD-BASED:")
     print("="*60)
-    print("✅ Database: AWS RDS PostgreSQL")
-    print("✅ Data Files: AWS S3")
+    print("✅ Database: Supabase PostgreSQL")
+    print("✅ Data Files: Local source files removed")
     print("✅ No local data stored locally")
     print("="*60)
 

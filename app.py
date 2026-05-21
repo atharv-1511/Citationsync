@@ -135,7 +135,8 @@ def create_app(config_name='development'):
         current_user = get_current_user()
         return {
             'current_user': current_user,
-            'is_admin_user': bool(current_user and current_user.is_admin)
+            'is_admin_user': bool(current_user and current_user.is_admin),
+            'config': app.config
         }
 
     serverless_runtime = bool(os.getenv('VERCEL') or os.getenv('AWS_LAMBDA_FUNCTION_NAME'))
@@ -219,7 +220,8 @@ def register_routes(app):
     def admin_page():
         """Admin console for adding directories."""
         directories = BacklinkDirectory.query.order_by(BacklinkDirectory.created_at.desc()).all()
-        return render_template('admin.html', directories=directories)
+        users = User.query.order_by(User.created_at.desc()).all()
+        return render_template('admin.html', directories=directories, users=users)
 
     @app.route('/admin/directories', methods=['POST'])
     @login_required
@@ -263,6 +265,58 @@ def register_routes(app):
         except Exception as e:
             db.session.rollback()
             flash(f'Cannot delete directory {directory.name}, it is likely in use.', 'error')
+        return redirect(url_for('admin_page'))
+
+    @app.route('/admin/users', methods=['POST'])
+    @login_required
+    @admin_required
+    def create_user():
+        """Create a new user (admin can add employees)."""
+        email = request.form.get('email', '').strip().lower()
+        full_name = request.form.get('full_name', '').strip()
+        password = request.form.get('password', '').strip()
+
+        if not email or not password or not full_name:
+            flash('Email, full name and password are required to create a user.', 'error')
+            return redirect(url_for('admin_page'))
+
+        # Prevent creating additional admins — only configured ADMIN_EMAIL is allowed admin role
+        configured_admin = app.config.get('ADMIN_EMAIL', '').strip().lower()
+        role = 'employee'
+        if email == configured_admin:
+            role = 'admin'
+
+        if User.query.filter_by(email=email).first():
+            flash('A user with that email already exists.', 'error')
+            return redirect(url_for('admin_page'))
+
+        user = User(email=email, full_name=full_name, role=role, active=True)
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+
+        flash(f'User {email} created.', 'success')
+        return redirect(url_for('admin_page'))
+
+    @app.route('/admin/user/<int:user_id>/delete', methods=['POST'])
+    @login_required
+    @admin_required
+    def delete_user(user_id):
+        """Delete an existing user (admin only). Prevent deleting configured admin."""
+        user = User.query.get_or_404(user_id)
+        configured_admin = app.config.get('ADMIN_EMAIL', '').strip().lower()
+        if user.email and user.email.lower() == configured_admin:
+            flash('Cannot delete the configured admin user.', 'error')
+            return redirect(url_for('admin_page'))
+
+        try:
+            db.session.delete(user)
+            db.session.commit()
+            flash(f'User {user.email} deleted.', 'success')
+        except Exception:
+            db.session.rollback()
+            flash('Unable to delete user; user may be referenced elsewhere.', 'error')
+
         return redirect(url_for('admin_page'))
     
     # ===================== API ENDPOINTS =====================

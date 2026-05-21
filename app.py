@@ -138,13 +138,18 @@ def create_app(config_name='development'):
             'is_admin_user': bool(current_user and current_user.is_admin)
         }
 
-    with app.app_context():
-        try:
-            db.create_all()
-            seed_default_users(app)
-            ensure_sqlite_schema(app)
-        except Exception as exc:
-            app.logger.warning('Database initialization skipped: %s', exc)
+    serverless_runtime = bool(os.getenv('VERCEL') or os.getenv('AWS_LAMBDA_FUNCTION_NAME'))
+
+    if not serverless_runtime:
+        with app.app_context():
+            try:
+                db.create_all()
+                seed_default_users(app)
+                ensure_sqlite_schema(app)
+            except Exception as exc:
+                app.logger.warning('Database initialization skipped: %s', exc)
+    else:
+        app.logger.info('Skipping database bootstrap in serverless runtime.')
     
     # Register blueprints and routes
     register_routes(app)

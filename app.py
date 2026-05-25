@@ -4,7 +4,7 @@ Main Flask Application
 """
 from functools import wraps
 
-from flask import Flask, render_template, jsonify, request, session, redirect, url_for, flash, g
+from flask import Flask, render_template, jsonify, request, session, redirect, url_for, flash, g, get_flashed_messages
 from flask_cors import CORS
 from config import config
 from models import db, User, Dealer, BacklinkDirectory, Citation
@@ -201,6 +201,11 @@ def register_routes(app):
             return redirect(url_for('index'))
 
         error = None
+
+        if request.method == 'GET':
+            # Login page does not render flashed banners, so clear any stale flash
+            # messages here before the user signs in again.
+            get_flashed_messages()
 
         if request.method == 'POST':
             email = request.form.get('email', '').strip().lower()
@@ -512,16 +517,26 @@ def register_routes(app):
         # Calculate average citations per dealer
         avg_citations = total_citations / total_dealers if total_dealers > 0 else 0
         
-        # Get dealers needing citations this month
+        # Get dealers needing citations this month in one grouped query instead of
+        # querying each dealer individually.
+        cutoff_date = datetime.utcnow() - timedelta(days=30)
+        recent_counts = {
+            dealer_id: count
+            for dealer_id, count in db.session.query(
+                Citation.dealer_id,
+                db.func.count(Citation.id)
+            ).filter(Citation.created_at >= cutoff_date).group_by(Citation.dealer_id).all()
+        }
+
         dealers_needing = []
-        for dealer in Dealer.query.all():
-            recent = dealer.get_recent_citations(months=1)
-            if len(recent) < 2:  # Need 2 per month
+        for dealer in Dealer.query.with_entities(Dealer.id, Dealer.name).all():
+            recent_count = recent_counts.get(dealer.id, 0)
+            if recent_count < 2:
                 dealers_needing.append({
                     'id': dealer.id,
                     'name': dealer.name,
-                    'citations_this_month': len(recent),
-                    'needed': 2 - len(recent)
+                    'citations_this_month': recent_count,
+                    'needed': 2 - recent_count
                 })
         
         return jsonify({

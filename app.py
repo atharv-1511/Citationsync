@@ -221,7 +221,6 @@ def register_routes(app):
     def logout():
         """Sign out the current user."""
         session.pop('user_id', None)
-        flash('You have been signed out.', 'success')
         return redirect(url_for('login'))
 
     @app.route('/admin')
@@ -400,6 +399,7 @@ def register_routes(app):
             'id': c.id,
             'directory_name': c.directory.name,
             'created_at': to_utc_iso(c.created_at),
+            'notes': c.notes,
             'is_recent': c.is_recent(),
             'created_by': c.created_by.full_name if c.created_by else 'System',
         } for c in citations]
@@ -496,6 +496,7 @@ def register_routes(app):
                 'dealer_id': citation.dealer_id,
                 'directory_name': citation.directory.name,
                     'created_at': to_utc_iso(citation.created_at),
+                    'notes': citation.notes,
                 'created_by': citation.created_by.full_name if citation.created_by else 'System'
             }
         }), 201

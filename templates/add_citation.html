@@ -175,6 +175,7 @@
                 <div style="width: 100%;">
                     <h4 style="margin-bottom: 5px; color: #155724; font-size: 1.1em;">Citation added successfully!</h4>
                     <p style="margin-bottom: 5px; color: #155724;"><strong>${data.citation.directory_name}</strong> for cafe <strong>${data.citation.dealer_id}</strong></p>
+                    ${data.citation.notes ? `<p style="margin-bottom: 5px; color: #155724;"><strong>Notes:</strong> ${escapeHtml(data.citation.notes)}</p>` : ''}
                     <p style="font-size: 0.85em; opacity: 0.9; color: #155724;">Added by <strong>${data.citation.created_by || 'System'}</strong></p>
                 </div>
             `;
@@ -195,6 +196,15 @@
         document.getElementById('success-container').style.display = 'none';
         document.getElementById('dealer-details').style.display = 'none';
         document.getElementById('directory-select-container').style.display = 'none';
+    }
+
+    function escapeHtml(value) {
+        return String(value)
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
     }
 
     // Allow Enter to add citation

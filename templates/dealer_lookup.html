@@ -102,7 +102,7 @@
             return;
         }
         
-        let html = '<table><thead><tr><th>Citation</th><th>Built On</th><th>Added By</th><th>Status</th></tr></thead><tbody>';
+        let html = '<table><thead><tr><th>Citation</th><th>Built On</th><th>Added By</th><th>Notes</th><th>Status</th></tr></thead><tbody>';
         
         dealer.citations.forEach(citation => {
             const status = citation.is_recent ? 
@@ -116,6 +116,7 @@
                     <td>${citation.directory_name}</td>
                     <td>${builtOn}</td>
                     <td>${citation.created_by || 'System'}</td>
+                    <td>${formatNotes(citation.notes)}</td>
                     <td>${status}</td>
                 </tr>
             `;
@@ -185,6 +186,20 @@
             dateStyle: 'medium',
             timeStyle: 'short'
         }).format(parsed);
+    }
+
+    function formatNotes(notes) {
+        if (!notes) return '<span style="color: #999;">-</span>';
+        return `<span title="${escapeHtml(notes)}">${escapeHtml(notes)}</span>`;
+    }
+
+    function escapeHtml(value) {
+        return String(value)
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
     }
 
     // Allow Enter key to search

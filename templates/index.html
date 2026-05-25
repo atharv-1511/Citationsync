@@ -7,8 +7,8 @@
     <h2>Welcome to CitationSync</h2>
     <p style="margin-top: 10px; color: #666; line-height: 1.6;">
         This system helps you manage backlink citations for your cafes efficiently. 
-        It tracks which citations have been built for each cafe and lists every available 
-        one while respecting the 6-month recency rule to avoid repetition.
+        It keeps citation history organized, shows what has already been built, and
+        surfaces what is available next.
     </p>
 </div>
 
@@ -66,7 +66,7 @@
                 const banner = document.getElementById('db-banner');
                 banner.style.display = 'block';
                 if (status.ok && status.database_env_present && status.database && status.database.startsWith('postgresql')) {
-                    banner.innerHTML = '<strong>Database connected:</strong> Supabase PostgreSQL is active.';
+                    banner.innerHTML = '<strong>Database spark:</strong> The data engine is awake and the app is running smoothly.';
                     banner.style.borderLeft = '6px solid #2e7d32';
                     banner.style.background = '#f1f8f4';
                 } else {

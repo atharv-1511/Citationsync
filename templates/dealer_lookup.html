@@ -108,11 +108,13 @@
             const status = citation.is_recent ? 
                 '<span class="badge badge-warning">Recent (6mo)</span>' : 
                 '<span class="badge badge-success">Available</span>';
+
+            const builtOn = formatBuiltOn(citation.created_at);
             
             html += `
                 <tr>
                     <td>${citation.directory_name}</td>
-                    <td>${citation.created_at}</td>
+                    <td>${builtOn}</td>
                     <td>${citation.created_by || 'System'}</td>
                     <td>${status}</td>
                 </tr>
@@ -169,6 +171,20 @@
 
     function hideLoading() {
         document.getElementById('loading').style.display = 'none';
+    }
+
+    function formatBuiltOn(timestamp) {
+        if (!timestamp) return '-';
+
+        const parsed = new Date(timestamp);
+        if (Number.isNaN(parsed.getTime())) {
+            return timestamp;
+        }
+
+        return new Intl.DateTimeFormat([], {
+            dateStyle: 'medium',
+            timeStyle: 'short'
+        }).format(parsed);
     }
 
     // Allow Enter key to search

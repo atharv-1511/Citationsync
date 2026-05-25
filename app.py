@@ -11,7 +11,7 @@ from models import db, User, Dealer, BacklinkDirectory, Citation
 from sqlalchemy import inspect, text
 from werkzeug.exceptions import HTTPException
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 def get_current_user():
@@ -26,6 +26,15 @@ def get_current_user():
     return db.session.get(User, user_id)
 
 
+def to_utc_iso(value):
+    """Serialize naive UTC datetimes as explicit UTC ISO 8601 strings."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+
+
 def login_required(view):
     """Require a signed-in user for web and API requests."""
     @wraps(view)
@@ -33,7 +42,6 @@ def login_required(view):
         if not get_current_user():
             if request.path.startswith('/api/'):
                 return jsonify({'error': 'Authentication required'}), 401
-            flash('Please sign in to continue.', 'error')
             return redirect(url_for('login', next=request.path))
         return view(*args, **kwargs)
 
@@ -312,6 +320,10 @@ def register_routes(app):
             return redirect(url_for('admin_page'))
 
         try:
+            BacklinkDirectory.query.filter_by(created_by_id=user.id).update({BacklinkDirectory.created_by_id: None})
+            BacklinkDirectory.query.filter_by(updated_by_id=user.id).update({BacklinkDirectory.updated_by_id: None})
+            Citation.query.filter_by(created_by_id=user.id).update({Citation.created_by_id: None})
+            Citation.query.filter_by(updated_by_id=user.id).update({Citation.updated_by_id: None})
             db.session.delete(user)
             db.session.commit()
             flash(f'User {user.email} deleted.', 'success')
@@ -359,6 +371,10 @@ def register_routes(app):
             return jsonify({'success': False, 'error': 'Cannot delete configured admin.'}), 403
 
         try:
+            BacklinkDirectory.query.filter_by(created_by_id=user.id).update({BacklinkDirectory.created_by_id: None})
+            BacklinkDirectory.query.filter_by(updated_by_id=user.id).update({BacklinkDirectory.updated_by_id: None})
+            Citation.query.filter_by(created_by_id=user.id).update({Citation.created_by_id: None})
+            Citation.query.filter_by(updated_by_id=user.id).update({Citation.updated_by_id: None})
             db.session.delete(user)
             db.session.commit()
             return jsonify({'success': True}), 200
@@ -383,7 +399,7 @@ def register_routes(app):
         citation_data = [{
             'id': c.id,
             'directory_name': c.directory.name,
-            'created_at': c.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'created_at': to_utc_iso(c.created_at),
             'is_recent': c.is_recent(),
             'created_by': c.created_by.full_name if c.created_by else 'System',
         } for c in citations]
@@ -394,7 +410,7 @@ def register_routes(app):
             'contact_info': dealer.contact_info,
             'total_citations': len(citations),
             'citations': citation_data,
-            'created_at': dealer.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            'created_at': to_utc_iso(dealer.created_at)
         })
     
     @app.route('/api/dealer/<dealer_id>/suggestions', methods=['GET'])
@@ -479,7 +495,7 @@ def register_routes(app):
                 'id': citation.id,
                 'dealer_id': citation.dealer_id,
                 'directory_name': citation.directory.name,
-                'created_at': citation.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                    'created_at': to_utc_iso(citation.created_at),
                 'created_by': citation.created_by.full_name if citation.created_by else 'System'
             }
         }), 201

@@ -116,6 +116,23 @@ class Citation(db.Model):
         return self.created_at >= cutoff_date
 
 
+class ActivityLog(db.Model):
+    """Recent activity feed for user actions across the app."""
+    __tablename__ = 'activity_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    action = db.Column(db.String(50), nullable=False)
+    entity_type = db.Column(db.String(50), nullable=False)
+    entity_id = db.Column(db.String(50), nullable=True)
+    description = db.Column(db.Text, nullable=False)
+    actor_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    actor = db.relationship('User', foreign_keys=[actor_id], lazy='joined')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    def __repr__(self):
+        return f'<ActivityLog {self.action} {self.entity_type}:{self.entity_id}>'
+
+
 def init_db(app):
     """Initialize database with Flask app context"""
     with app.app_context():

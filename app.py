@@ -7,8 +7,8 @@ from functools import wraps
 from flask import Flask, render_template, jsonify, request, session, redirect, url_for, flash, g, get_flashed_messages
 from flask_cors import CORS
 from config import config
-from models import db, User, Dealer, BacklinkDirectory, Citation
-from sqlalchemy import inspect, text
+from models import db, User, Dealer, BacklinkDirectory, Citation, ActivityLog
+from sqlalchemy import inspect, text, func
 from werkzeug.exceptions import HTTPException
 import os
 from datetime import datetime, timedelta, timezone
@@ -33,6 +33,69 @@ def to_utc_iso(value):
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+
+
+def log_activity(action, entity_type, description, actor=None, entity_id=None):
+    """Persist a recent activity item without interrupting the main action."""
+    try:
+        db.session.add(ActivityLog(
+            action=action,
+            entity_type=entity_type,
+            entity_id=str(entity_id) if entity_id is not None else None,
+            description=description,
+            actor_id=actor.id if actor else None,
+        ))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
+def serialize_activity(activity):
+    return {
+        'id': activity.id,
+        'action': activity.action,
+        'entity_type': activity.entity_type,
+        'entity_id': activity.entity_id,
+        'description': activity.description,
+        'actor': activity.actor.full_name if activity.actor else 'System',
+        'created_at': to_utc_iso(activity.created_at),
+    }
+
+
+def get_recent_dealers_page(page, per_page):
+    pagination = Dealer.query.order_by(Dealer.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
+    dealer_ids = [dealer.id for dealer in pagination.items]
+    cutoff_date = datetime.utcnow() - timedelta(days=30)
+
+    citation_counts = {}
+    recent_counts = {}
+    if dealer_ids:
+        citation_counts = {
+            dealer_id: count
+            for dealer_id, count in db.session.query(
+                Citation.dealer_id,
+                func.count(Citation.id)
+            ).filter(Citation.dealer_id.in_(dealer_ids)).group_by(Citation.dealer_id).all()
+        }
+        recent_counts = {
+            dealer_id: count
+            for dealer_id, count in db.session.query(
+                Citation.dealer_id,
+                func.count(Citation.id)
+            ).filter(
+                Citation.dealer_id.in_(dealer_ids),
+                Citation.created_at >= cutoff_date,
+            ).group_by(Citation.dealer_id).all()
+        }
+
+    dealers = [{
+        'id': dealer.id,
+        'name': dealer.name,
+        'citation_count': citation_counts.get(dealer.id, 0),
+        'recent_months': recent_counts.get(dealer.id, 0)
+    } for dealer in pagination.items]
+
+    return pagination, dealers
 
 
 def login_required(view):
@@ -136,6 +199,12 @@ def create_app(config_name='development'):
         db_path = os.path.dirname(database_uri.replace('sqlite:///', ''))
         os.makedirs(db_path, exist_ok=True)
 
+    with app.app_context():
+        try:
+            ActivityLog.__table__.create(bind=db.engine, checkfirst=True)
+        except Exception as exc:
+            app.logger.warning('Activity log table initialization skipped: %s', exc)
+
     @app.before_request
     def load_current_user():
         g.current_user = get_current_user()
@@ -202,10 +271,9 @@ def register_routes(app):
 
         error = None
 
-        if request.method == 'GET':
-            # Login page does not render flashed banners, so clear any stale flash
-            # messages here before the user signs in again.
-            get_flashed_messages()
+        # Login page does not render flashed banners, so clear any stale flash
+        # messages before the user signs in again.
+        get_flashed_messages()
 
         if request.method == 'POST':
             email = request.form.get('email', '').strip().lower()
@@ -263,6 +331,7 @@ def register_routes(app):
         )
         db.session.add(directory)
         db.session.commit()
+        log_activity('created', 'directory', f'{user.full_name if user else "System"} added directory {name}.', actor=user, entity_id=directory.id)
 
         flash(f'Added directory {name}.', 'success')
         return redirect(url_for('admin_page'))
@@ -275,6 +344,7 @@ def register_routes(app):
         try:
             db.session.delete(directory)
             db.session.commit()
+            log_activity('deleted', 'directory', f'{get_current_user().full_name} deleted directory {directory.name}.', actor=get_current_user(), entity_id=directory.id)
             flash(f'Deleted directory {directory.name}.', 'success')
         except Exception as e:
             db.session.rollback()
@@ -308,6 +378,7 @@ def register_routes(app):
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
+        log_activity('created', 'user', f'{get_current_user().full_name} created user {email}.', actor=get_current_user(), entity_id=user.id)
 
         flash(f'User {email} created.', 'success')
         return redirect(url_for('admin_page'))
@@ -330,6 +401,7 @@ def register_routes(app):
             Citation.query.filter_by(updated_by_id=user.id).update({Citation.updated_by_id: None})
             db.session.delete(user)
             db.session.commit()
+            log_activity('deleted', 'user', f'{get_current_user().full_name} deleted user {user.email}.', actor=get_current_user(), entity_id=user.id)
             flash(f'User {user.email} deleted.', 'success')
         except Exception:
             db.session.rollback()
@@ -362,6 +434,7 @@ def register_routes(app):
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
+        log_activity('created', 'user', f'{get_current_user().full_name} created user {email}.', actor=get_current_user(), entity_id=user.id)
 
         return jsonify({'success': True, 'user': {'id': user.id, 'email': user.email, 'full_name': user.full_name, 'role': user.role, 'created_at': user.created_at.isoformat()}}), 201
 
@@ -381,6 +454,7 @@ def register_routes(app):
             Citation.query.filter_by(updated_by_id=user.id).update({Citation.updated_by_id: None})
             db.session.delete(user)
             db.session.commit()
+            log_activity('deleted', 'user', f'{get_current_user().full_name} deleted user {user.email}.', actor=get_current_user(), entity_id=user.id)
             return jsonify({'success': True}), 200
         except Exception:
             db.session.rollback()
@@ -492,6 +566,13 @@ def register_routes(app):
         
         db.session.add(citation)
         db.session.commit()
+        log_activity(
+            'created',
+            'citation',
+            f'{get_current_user().full_name} added citation {citation.directory.name} for cafe {dealer_id}' + (f' with notes: {citation.notes}' if citation.notes else '.'),
+            actor=get_current_user(),
+            entity_id=citation.id,
+        )
         
         return jsonify({
             'success': True,
@@ -500,8 +581,8 @@ def register_routes(app):
                 'id': citation.id,
                 'dealer_id': citation.dealer_id,
                 'directory_name': citation.directory.name,
-                    'created_at': to_utc_iso(citation.created_at),
-                    'notes': citation.notes,
+                'created_at': to_utc_iso(citation.created_at),
+                'notes': citation.notes,
                 'created_by': citation.created_by.full_name if citation.created_by else 'System'
             }
         }), 201
@@ -524,7 +605,7 @@ def register_routes(app):
             dealer_id: count
             for dealer_id, count in db.session.query(
                 Citation.dealer_id,
-                db.func.count(Citation.id)
+                func.count(Citation.id)
             ).filter(Citation.created_at >= cutoff_date).group_by(Citation.dealer_id).all()
         }
 
@@ -586,21 +667,69 @@ def register_routes(app):
         """Get list of all dealers"""
         page = request.args.get('page', 1, type=int)
         per_page = app.config['ITEMS_PER_PAGE']
-        
-        pagination = Dealer.query.paginate(page=page, per_page=per_page)
-        
-        dealers = [{
-            'id': d.id,
-            'name': d.name,
-            'citation_count': d.get_citation_count(),
-            'recent_months': len(d.get_recent_citations(months=1))
-        } for d in pagination.items]
-        
+
+        pagination, dealers = get_recent_dealers_page(page, per_page)
+
         return jsonify({
             'dealers': dealers,
             'total': pagination.total,
             'pages': pagination.pages,
             'current_page': page
+        })
+
+    @app.route('/api/dashboard/summary', methods=['GET'])
+    @login_required
+    def dashboard_summary():
+        """Fetch dashboard stats, dealers, and recent activity in one request."""
+        page = request.args.get('page', 1, type=int)
+        per_page = app.config['ITEMS_PER_PAGE']
+
+        total_dealers = Dealer.query.count()
+        total_directories = BacklinkDirectory.query.count()
+        total_citations = Citation.query.count()
+        avg_citations = total_citations / total_dealers if total_dealers > 0 else 0
+
+        cutoff_date = datetime.utcnow() - timedelta(days=30)
+        recent_counts = {
+            dealer_id: count
+            for dealer_id, count in db.session.query(
+                Citation.dealer_id,
+                func.count(Citation.id)
+            ).filter(Citation.created_at >= cutoff_date).group_by(Citation.dealer_id).all()
+        }
+
+        dealers_needing = []
+        for dealer_id, dealer_name in db.session.query(Dealer.id, Dealer.name).all():
+            recent_count = recent_counts.get(dealer_id, 0)
+            if recent_count < 2:
+                dealers_needing.append({
+                    'id': dealer_id,
+                    'name': dealer_name,
+                    'citations_this_month': recent_count,
+                    'needed': 2 - recent_count,
+                })
+
+        pagination, dealers = get_recent_dealers_page(page, per_page)
+        activities = ActivityLog.query.order_by(ActivityLog.created_at.desc()).limit(8).all()
+
+        return jsonify({
+            'ok': True,
+            'database': app.config['SQLALCHEMY_DATABASE_URI'],
+            'database_env_present': bool(os.getenv('DATABASE_URL')),
+            'database_env_is_supabase': bool(os.getenv('DATABASE_URL') and 'supabase.co' in os.getenv('DATABASE_URL')),
+            'stats': {
+                'total_dealers': total_dealers,
+                'total_directories': total_directories,
+                'total_citations': total_citations,
+                'avg_citations_per_dealer': round(avg_citations, 2),
+                'dealers_needing_citations': len(dealers_needing),
+                'dealers_status': dealers_needing,
+            },
+            'dealers': dealers,
+            'total': pagination.total,
+            'pages': pagination.pages,
+            'current_page': page,
+            'recent_activities': [serialize_activity(activity) for activity in activities],
         })
     
     @app.route('/api/directories', methods=['GET'])

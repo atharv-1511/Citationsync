@@ -36,6 +36,12 @@
         </div>
     </div>
 
+    <!-- Recent Activities -->
+    <div class="card" style="margin-top: 30px;">
+        <h3>Recent Activities</h3>
+        <div id="recent-activities" style="margin-top: 15px;"></div>
+    </div>
+
     <!-- All Dealers -->
     <div class="card" style="margin-top: 30px;">
         <h3>All Cafes</h3>
@@ -45,16 +51,16 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        loadDashboard();
+        loadDashboard(1);
     });
 
-    function loadDashboard() {
-        fetch('/api/db-status')
+    function loadDashboard(page) {
+        fetch('/api/dashboard/summary?page=' + page, { credentials: 'same-origin' })
             .then(response => response.json())
-            .then(status => {
+            .then(summary => {
                 const banner = document.getElementById('db-banner');
                 banner.style.display = 'block';
-                if (status.ok && status.database_env_present && status.database && status.database.startsWith('postgresql')) {
+                if (summary.ok && summary.database_env_present && summary.database && summary.database.startsWith('postgresql')) {
                     banner.innerHTML = '<strong>Database connected:</strong> Supabase PostgreSQL is active.';
                     banner.style.borderLeft = '6px solid #2e7d32';
                     banner.style.background = '#f1f8f4';
@@ -63,37 +69,14 @@
                     banner.style.borderLeft = '6px solid #d32f2f';
                     banner.style.background = '#fff4f4';
                 }
-            })
-            .catch(error => console.error('Error loading db status:', error));
-
-        fetch('/api/citations/stats', { credentials: 'same-origin' })
-            .then(r => {
-                if (!r.ok) {
-                    throw new Error('Failed to load stats');
-                }
-                return r.json();
-            })
-            .then(stats => displayStats(stats))
-            .catch(error => console.error('Error loading stats:', error));
-            
-        loadDealers(1);
-    }
-
-    function loadDealers(page) {
-        fetch('/api/dealers?page=' + page, { credentials: 'same-origin' })
-            .then(r => {
-                if (!r.ok) {
-                    throw new Error('Failed to load dealers');
-                }
-                return r.json();
-            })
-            .then(dealers => {
-                displayAllDealers(dealers);
+                displayStats(summary.stats);
+                displayAllDealers(summary);
+                displayRecentActivities(summary.recent_activities || []);
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('dashboard-content').style.display = 'block';
             })
             .catch(error => {
-                console.error('Error loading dealers:', error);
+                console.error('Error loading dashboard:', error);
                 document.getElementById('loading').innerHTML = `
                     <div class="alert alert-error">Error loading dashboard: ${error.message}</div>
                 `;
@@ -132,16 +115,61 @@
         if (data.pages > 1) {
             html += `<div style="margin-top: 15px; display: flex; align-items: center; gap: 15px;">`;
             if (data.current_page > 1) {
-                html += `<button onclick="loadDealers(${data.current_page - 1})" style="padding: 8px 15px; font-size: 0.9em; width: auto;">Previous</button>`;
+                html += `<button onclick="loadDashboard(${data.current_page - 1})" style="padding: 8px 15px; font-size: 0.9em; width: auto;">Previous</button>`;
             }
             html += `<span style="color: #666; font-weight: 500;">Page ${data.current_page} of ${data.pages}</span>`;
             if (data.current_page < data.pages) {
-                html += `<button onclick="loadDealers(${data.current_page + 1})" style="padding: 8px 15px; font-size: 0.9em; width: auto;">Next</button>`;
+                html += `<button onclick="loadDashboard(${data.current_page + 1})" style="padding: 8px 15px; font-size: 0.9em; width: auto;">Next</button>`;
             }
             html += `</div>`;
         }
         
         container.innerHTML = html;
+    }
+
+    function displayRecentActivities(activities) {
+        const container = document.getElementById('recent-activities');
+
+        if (!activities || activities.length === 0) {
+            container.innerHTML = '<p style="color: #999;">No recent activity yet.</p>';
+            return;
+        }
+
+        let html = '<div style="display: grid; gap: 12px;">';
+        activities.forEach(activity => {
+            html += `
+                <div style="border: 1px solid var(--border-color); border-radius: 8px; padding: 14px 16px; background: #fafbfe;">
+                    <div style="display:flex; justify-content:space-between; gap: 12px; flex-wrap: wrap;">
+                        <strong>${escapeHtml(activity.actor)}</strong>
+                        <span style="color:#666; font-size:0.9em;">${formatActivityTime(activity.created_at)}</span>
+                    </div>
+                    <div style="margin-top: 6px; color: var(--text-main);">
+                        ${escapeHtml(activity.description)}
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    function formatActivityTime(timestamp) {
+        if (!timestamp) return '-';
+        const parsed = new Date(timestamp);
+        if (Number.isNaN(parsed.getTime())) return timestamp;
+        return new Intl.DateTimeFormat([], {
+            dateStyle: 'medium',
+            timeStyle: 'short'
+        }).format(parsed);
+    }
+
+    function escapeHtml(value) {
+        return String(value)
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
     }
 
     function fillDealerId(dealerId) {

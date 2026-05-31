@@ -93,18 +93,22 @@
     function displayDealerInfo(dealer) {
         document.getElementById('dealer-name').textContent = dealer.name;
         document.getElementById('dealer-id-display').textContent = dealer.id;
-        document.getElementById('total-citations').textContent = dealer.total_citations;
+        const visibleCitations = (dealer.citations || []).filter(citation => {
+            const name = String(citation.directory_name || '').toLowerCase();
+            return !name.endsWith('.example');
+        });
+        document.getElementById('total-citations').textContent = visibleCitations.length;
         
         const citationsList = document.getElementById('citations-list');
         
-        if (dealer.citations.length === 0) {
+        if (visibleCitations.length === 0) {
             citationsList.innerHTML = '<p style="color: #999;">No citations built yet</p>';
             return;
         }
         
         let html = '<table><thead><tr><th>Citation</th><th>Built On</th><th>Added By</th><th>Notes</th><th>Status</th></tr></thead><tbody>';
         
-        dealer.citations.forEach(citation => {
+        visibleCitations.forEach(citation => {
             const status = citation.is_recent ? 
                 '<span class="badge badge-warning">Recent (6mo)</span>' : 
                 '<span class="badge badge-success">Available</span>';

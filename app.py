@@ -829,8 +829,9 @@ def register_routes(app):
         if not dealer:
             return jsonify({'error': 'Dealer not found'}), 404
         
-        # Get all citations for this dealer
+        # Get all citations for this dealer, excluding placeholder .example directories.
         citations = Citation.query.filter_by(dealer_id=dealer_id).all()
+        citations = [c for c in citations if not str(c.directory.url or '').lower().endswith('.example')]
         
         citation_data = [{
             'id': c.id,

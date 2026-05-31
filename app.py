@@ -659,7 +659,9 @@ def register_routes(app):
     @admin_required
     def admin_page():
         """Admin console for adding directories."""
-        directories = BacklinkDirectory.query.order_by(BacklinkDirectory.created_at.desc()).all()
+        directories = BacklinkDirectory.query.filter(
+            ~BacklinkDirectory.url.ilike('%.example')
+        ).order_by(BacklinkDirectory.created_at.desc()).all()
         users = User.query.order_by(User.created_at.desc()).all()
         return render_template('admin.html', directories=directories, users=users)
 

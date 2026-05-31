@@ -94,7 +94,7 @@
                 </tr>
             </thead>
             <tbody>
-                {% for directory in directories if not (directory.url and directory.url|lower.endswith('.example')) %}
+                {% for directory in directories %}
                 <tr>
                     <td>{{ directory.name }}</td>
                     <td><a href="{{ directory.url }}" target="_blank" rel="noopener noreferrer">{{ directory.url }}</a></td>

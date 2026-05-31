@@ -563,6 +563,23 @@ def create_app(config_name='development'):
         except Exception as exc:
             app.logger.warning('Activity log table initialization skipped: %s', exc)
 
+        # Create a few inexpensive indexes for the hottest dashboard and citation queries.
+        # These are safe to run repeatedly because IF NOT EXISTS prevents duplicates.
+        index_statements = [
+            'CREATE INDEX IF NOT EXISTS ix_backlink_directories_active_url ON backlink_directories (active, url)',
+            'CREATE INDEX IF NOT EXISTS ix_backlink_directories_created_at ON backlink_directories (created_at)',
+            'CREATE INDEX IF NOT EXISTS ix_citations_dealer_created_at ON citations (dealer_id, created_at)',
+            'CREATE INDEX IF NOT EXISTS ix_citations_directory_id ON citations (directory_id)',
+            'CREATE INDEX IF NOT EXISTS ix_activity_logs_created_at ON activity_logs (created_at)',
+        ]
+        try:
+            for statement in index_statements:
+                db.session.execute(text(statement))
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            app.logger.warning('Index initialization skipped: %s', exc)
+
     @app.before_request
     def load_current_user():
         g.current_user = get_current_user()
@@ -1288,7 +1305,8 @@ def register_routes(app):
 
         if request.path.startswith('/api/'):
             payload = {
-                'error': 'Internal server error',
+                'error': 'Something went wrong',
+                'message': 'The request could not be completed. Please try again in a moment.',
                 'path': request.path,
                 'method': request.method,
                 'type': error.__class__.__name__,
@@ -1297,7 +1315,12 @@ def register_routes(app):
                 payload['detail'] = str(error)
             return jsonify(payload), 500
 
-        return jsonify({'error': 'Internal server error'}), 500
+        return render_template(
+            'error.html',
+            title='Something went wrong',
+            message='We hit a snag while loading this page. Please go back and try again.',
+            details=str(error) if (os.getenv('VERCEL') or os.getenv('FLASK_ENV', 'production') != 'production') else None,
+        ), 500
 
 # Expose a top-level WSGI `app` for hosting platforms (Vercel, Gunicorn, etc.).
 # This makes `from app import app` work and satisfies Vercel's requirement.

@@ -1171,9 +1171,16 @@ def register_routes(app):
         pagination, dealers = get_recent_dealers_page(page, per_page)
         activities = ActivityLog.query.order_by(ActivityLog.created_at.desc()).limit(7).all()
 
-        # Include active and removed directories for dashboard
-        active_dirs = BacklinkDirectory.query.filter_by(active=True).order_by(BacklinkDirectory.name).all()
-        removed_dirs = BacklinkDirectory.query.filter_by(active=False).order_by(BacklinkDirectory.updated_at.desc()).all()
+        # Include active and removed directories for dashboard, but exclude placeholder
+        # directories that were created as '.example' placeholders.
+        active_dirs = BacklinkDirectory.query.filter(
+            BacklinkDirectory.active == True,
+            ~BacklinkDirectory.url.ilike('%.example')
+        ).order_by(BacklinkDirectory.name).all()
+        removed_dirs = BacklinkDirectory.query.filter(
+            BacklinkDirectory.active == False,
+            ~BacklinkDirectory.url.ilike('%.example')
+        ).order_by(BacklinkDirectory.updated_at.desc()).all()
 
         def serialize_directory(d):
             return {
@@ -1213,7 +1220,11 @@ def register_routes(app):
     @login_required
     def get_directories():
         """Get list of all directories"""
-        directories = BacklinkDirectory.query.filter_by(active=True).all()
+        # Return active directories for UI, excluding any '.example' placeholder URLs
+        directories = BacklinkDirectory.query.filter(
+            BacklinkDirectory.active == True,
+            ~BacklinkDirectory.url.ilike('%.example')
+        ).all()
         
         return jsonify({
             'directories': [{

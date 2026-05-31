@@ -27,6 +27,7 @@ def clear_existing_data():
     db.session.query(Citation).delete(synchronize_session=False)
     db.session.query(ActivityLog).delete(synchronize_session=False)
     db.session.query(Dealer).delete(synchronize_session=False)
+    db.session.query(BacklinkDirectory).delete(synchronize_session=False)
     db.session.commit()
     print("✓ Existing data cleared")
 
@@ -174,6 +175,8 @@ def import_dealers_and_citations():
             website_row_idx = 1
             names_row_idx = 2 if len(df) > 2 else 1
 
+        citation_start_row = 3 if website_row_idx is not None else 2
+
         dealer_names = df.iloc[names_row_idx].values
 
         # Import dealers (skip NaN values)
@@ -254,8 +257,8 @@ def import_dealers_and_citations():
             try:
                 db.session.flush()  # Flush to get the dealer in the session
 
-                # Import citations for this dealer (from row 2 onwards)
-                for row_idx in range(2, len(df)):
+                # Import citations for this dealer (skip the website/name rows)
+                for row_idx in range(citation_start_row, len(df)):
                     citation_name = df.iloc[row_idx, col_idx]
                     if pd.isna(citation_name) or citation_name == '':
                         continue
@@ -284,7 +287,7 @@ def import_dealers_and_citations():
 
                     if not existing_citation:
                         # Create citation with a date offset (to simulate past citations)
-                        created_date = datetime.now(timezone.utc) - timedelta(days=int((row_idx - 2) * 10))
+                        created_date = datetime.now(timezone.utc) - timedelta(days=int((row_idx - citation_start_row) * 10))
                         citation = Citation(
                             dealer_id=dealer_id,
                             directory_id=directory.id,

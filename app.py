@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 import re
 import json
 import random
+from collections import OrderedDict
 from html import unescape
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -160,6 +161,43 @@ def _trim_to_length(value, max_length=200):
     return f'{short}.'
 
 
+def _word_count(value):
+    return len([token for token in re.split(r'\s+', str(value or '').strip()) if token])
+
+
+def _trim_to_word_range(value, min_words=50, max_words=80):
+    text_value = re.sub(r'\s+', ' ', str(value or '').strip())
+    words = text_value.split()
+    if len(words) <= max_words:
+        return text_value
+    trimmed = ' '.join(words[:max_words]).strip()
+    return trimmed.rstrip('.,;:!') + '.'
+
+
+def _dedupe_keywords(keywords, min_count=15, max_count=25):
+    ordered = []
+    seen = set()
+    for keyword in keywords:
+        normalized = re.sub(r'\s+', ' ', str(keyword or '').strip().lower())
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        ordered.append(normalized)
+    if len(ordered) < min_count:
+        return ordered
+    return ordered[:max_count]
+
+
+def _remove_dealer_name(text_value, dealer_name):
+    result = str(text_value or '')
+    if dealer_name:
+        pattern = re.escape(str(dealer_name).strip())
+        result = re.sub(pattern, '', result, flags=re.I)
+    result = re.sub(r'\s{2,}', ' ', result)
+    result = re.sub(r'\s+([,.;:!?])', r'\1', result).strip(' ,;:')
+    return result
+
+
 def build_local_seo_content(dealer_name, website_url, scraped_context=None, generation_index=1, regenerate=False):
     """Create SEO content from dealer name + dealer website context with varied phrasing."""
     clean_dealer_name = str(dealer_name or '').strip()
@@ -174,9 +212,9 @@ def build_local_seo_content(dealer_name, website_url, scraped_context=None, gene
     host_label = (host.split('.')[0] if host else 'website') or 'website'
     scraped_context = scraped_context or {}
 
-    page_title = scraped_context.get('title') or clean_dealer_name
+    page_title = scraped_context.get('title') or 'the dealership site'
     page_topic = scraped_context.get('h1') or 'vehicle sales and service'
-    page_snippet = scraped_context.get('meta_description') or scraped_context.get('snippet') or 'local dealership information and support'
+    page_snippet = scraped_context.get('meta_description') or scraped_context.get('snippet') or 'dealership information and support'
 
     dealer_terms = _tokenize_text(clean_dealer_name)
     host_terms = _tokenize_text(host_label)
@@ -189,7 +227,6 @@ def build_local_seo_content(dealer_name, website_url, scraped_context=None, gene
     ]))
 
     keyword_seed = [
-        clean_dealer_name,
         host_label,
         host,
         *dealer_terms[:6],
@@ -200,35 +237,39 @@ def build_local_seo_content(dealer_name, website_url, scraped_context=None, gene
         'inventory',
         'service',
         'sales',
+        'financing',
+        'maintenance',
+        'parts',
+        'used cars',
+        'new cars',
+        'certified pre-owned',
+        'schedule service',
+        'auto repair',
+        'truck',
+        'suv',
+        'sedan',
+        'lease deals',
     ]
-    keyword_set = []
-    seen = set()
-    for item in keyword_seed:
-        normalized = str(item or '').strip().lower()
-        if not normalized or normalized in seen:
-            continue
-        seen.add(normalized)
-        keyword_set.append(normalized)
-
+    keyword_set = _dedupe_keywords(keyword_seed, min_count=15, max_count=25)
     random.shuffle(keyword_set)
 
     openers = [
-        f'{clean_dealer_name} offers a customer-focused online experience for buyers and vehicle owners.',
-        f'{clean_dealer_name} gives drivers one place to explore inventory, services, and dealership support.',
-        f'Drivers can visit {clean_dealer_name} online to review dealership updates and automotive resources.',
-        f'{clean_dealer_name} presents dealership details clearly so customers can plan their next visit.',
+        'This dealership offers a customer-focused online experience for buyers and vehicle owners.',
+        'Drivers can explore inventory, services, and dealership support through this dealership website.',
+        'Visitors can review dealership updates and automotive resources in one convenient place.',
+        'The website presents dealership details clearly so customers can plan their next visit.',
     ]
     benefits = [
         f'Learn more on {host} and explore {page_topic}.',
-        f'Use {host} to review dealership details and current customer information.',
+        f'Use {host} to review inventory, finance options, and customer support.',
         f'Visit {host} for practical information about inventory, service, and support.',
-        f'Check {host} to see how {clean_dealer_name} supports local drivers.',
+        f'Check {host} for shopping tools, service details, and helpful resources.',
     ]
     meta_starts = [
-        f'Explore {clean_dealer_name} at {host} for trusted dealership details, inventory insights, and service support.',
-        f'Visit {clean_dealer_name} online to find dealership updates, customer resources, and local automotive information.',
-        f'{clean_dealer_name} shares practical dealership information through {host} for shoppers and owners.',
-        f'Find {clean_dealer_name} on {host} for dealership highlights, customer guidance, and automotive support.',
+        f'Explore this dealership at {host} for trusted inventory, finance, and service information.',
+        f'Visit the website for dealership updates, customer resources, and automotive support.',
+        f'This dealership shares practical shopping and service information through {host}.',
+        f'Find helpful dealership information on {host} for shoppers and owners.',
     ]
     unique_angles = [
         f'Page focus: {page_title}.',
@@ -237,9 +278,25 @@ def build_local_seo_content(dealer_name, website_url, scraped_context=None, gene
         f'Edition {generation_index}{"R" if regenerate else "G"} for unique phrasing.',
     ]
 
-    description = _trim_to_length(f'{random.choice(openers)} {random.choice(benefits)} {random.choice(unique_angles)}', 200)
-    meta_description = _trim_to_length(f'{random.choice(meta_starts)} {random.choice(unique_angles)}', 200)
-    meta_keywords = ', '.join(keyword_set[:18])
+    description = _trim_to_word_range(
+        _remove_dealer_name(f'{random.choice(openers)} {random.choice(benefits)} {random.choice(unique_angles)}', clean_dealer_name),
+        50,
+        80,
+    )
+    meta_description = _trim_to_length(
+        _remove_dealer_name(f'{random.choice(meta_starts)} {random.choice(unique_angles)}', clean_dealer_name),
+        160,
+    )
+    if _word_count(description) < 50:
+        description = _trim_to_word_range(
+            _remove_dealer_name(
+                f'{random.choice(openers)} {random.choice(benefits)} {random.choice(unique_angles)} {random.choice(benefits)}',
+                clean_dealer_name,
+            ),
+            50,
+            80,
+        )
+    meta_keywords = ', '.join(keyword_set[:25])
 
     return {
         'description': description,
@@ -267,17 +324,25 @@ def generate_ai_seo_content(dealer_name, website_url, scraped_context, regenerat
         return None, 'OPENAI_API_KEY is not configured'
 
     model = os.getenv('OPENAI_MODEL', 'gpt-4o-mini').strip() or 'gpt-4o-mini'
-    style_hint = 'Create an alternative phrasing and angle than previous attempts.' if regenerate else 'Create a high-quality first draft.'
+    style_hint = 'Create a new angle and phrasing than previous attempts.' if regenerate else 'Create a strong first draft.'
 
     prompt = (
-        'Generate JSON only with keys: description, meta_description, meta_keywords. '\
-        'Rules: description <= 200 chars, meta_description <= 200 chars, '\
-        'meta_keywords must be comma-separated and based on dealer name + website only. '\
-        'Do not mention citation directories. '\
+        'Use the following prompt as the base for SEO content generation. '\
+        'You will receive a dealer name and website URL. Visit the website and write SEO content. '\
+        'Return JSON only with keys: description, meta_description, meta_keywords. '\
+        'Requirements: '\
+        '1) Short Description must be 50-80 words. '\
+        '2) Meta Description must be 140-160 characters. '\
+        '3) Meta Keywords must contain 15-25 relevant keywords separated by commas. '\
+        'Guidelines: analyze the website before writing; focus on vehicle sales, financing, service, maintenance, and genuine parts only if available; do not include address; '\
+        'do not repeat the dealership name within the content; avoid location targeting or proximity phrases like near me, nearby, serving the area; keep it natural, unique, and SEO-friendly; '\
+        'do not keyword-stuff; keywords must be based on the actual services and inventory offered on the website. '\
+        'Dealer name and website are inputs for analysis only. '\
         f'Dealer Name: {dealer_name}. Website: {website_url}. '\
         f'Website title: {scraped_context.get("title", "")}. '\
         f'Website h1: {scraped_context.get("h1", "")}. '\
         f'Website meta description: {scraped_context.get("meta_description", "")}. '\
+        f'Website meta keywords: {scraped_context.get("meta_keywords", "")}. '\
         f'Website snippet: {scraped_context.get("snippet", "")}. '\
         f'{style_hint}'
     )
@@ -315,11 +380,22 @@ def generate_ai_seo_content(dealer_name, website_url, scraped_context, regenerat
         if not parsed:
             return None, 'AI response did not contain valid JSON content'
 
-        description = _trim_to_length(parsed.get('description', ''), 200)
-        meta_description = _trim_to_length(parsed.get('meta_description', ''), 200)
-        meta_keywords = str(parsed.get('meta_keywords', '')).strip()
+        description = _trim_to_word_range(_remove_dealer_name(parsed.get('description', ''), dealer_name), 50, 80)
+        meta_description = _trim_to_length(_remove_dealer_name(parsed.get('meta_description', ''), dealer_name), 160)
+        meta_keywords = _dedupe_keywords(str(parsed.get('meta_keywords', '')).split(','), 15, 25)
+        meta_keywords = ', '.join(meta_keywords)
         if not description or not meta_description or not meta_keywords:
             return None, 'AI response missing required fields'
+
+        if _word_count(description) < 50:
+            description = _trim_to_word_range(
+                _remove_dealer_name(
+                    f"{description} {scraped_context.get('snippet', '')} {scraped_context.get('h1', '')}",
+                    dealer_name,
+                ),
+                50,
+                80,
+            )
 
         return {
             'description': description,

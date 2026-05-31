@@ -19,7 +19,6 @@
 
     <div id="dealer-details" style="display: none; margin-bottom: 20px;">
         <p><strong>Dealer Name:</strong> <span id="dealer-name"></span></p>
-        <p><strong>Website URL:</strong> <span id="dealer-url"></span></p>
         <p><strong>Total Citations Built:</strong> <span id="total-citations"></span></p>
     </div>
 
@@ -38,6 +37,12 @@
         <div class="form-group">
             <label for="notes">Notes (Optional):</label>
             <textarea id="notes" placeholder="Add any notes about this citation" rows="3"></textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="dealer-website-url">Dealer Website URL:</label>
+            <input type="url" id="dealer-website-url" placeholder="Enter the dealer website URL" />
+            <div style="font-size:0.85em; color:#666; margin-top:4px;">Used to generate SEO content for the dealer website.</div>
         </div>
 
         <div style="margin: 18px 0; padding: 16px; border: 1px solid var(--border-color); border-radius: 10px; background: #fafbfe;">
@@ -83,7 +88,7 @@
 <script>
     let allDirectories = [];
     let currentDealerName = '';
-    let currentDealerUrl = '';
+    let currentDealerWebsiteUrl = '';
 
     // Load all directories on page load
     document.addEventListener('DOMContentLoaded', function() {
@@ -102,7 +107,7 @@
             document.getElementById('dealer-details').style.display = 'none';
             document.getElementById('directory-select-container').style.display = 'none';
             currentDealerName = '';
-            currentDealerUrl = '';
+            currentDealerWebsiteUrl = '';
             return;
         }
 
@@ -122,11 +127,12 @@
                 }
 
                 document.getElementById('dealer-name').textContent = data.name;
-                document.getElementById('dealer-url').textContent = 'Select a directory to generate content';
                 document.getElementById('total-citations').textContent = data.total_citations;
                 document.getElementById('dealer-details').style.display = 'block';
                 document.getElementById('error-container').style.display = 'none';
                 currentDealerName = data.name || '';
+                currentDealerWebsiteUrl = extractWebsiteUrl(data.contact_info || '');
+                document.getElementById('dealer-website-url').value = currentDealerWebsiteUrl;
 
                 loadAvailableDirectories(dealerId);
             })
@@ -175,14 +181,14 @@
     }
 
     document.getElementById('directory-id').addEventListener('change', updateSelectedDirectoryInfo);
+    document.getElementById('dealer-website-url').addEventListener('input', function() {
+        currentDealerWebsiteUrl = this.value.trim();
+    });
     document.getElementById('seo-description').addEventListener('input', updateSeoCounters);
     document.getElementById('seo-meta-description').addEventListener('input', updateSeoCounters);
 
     function updateSelectedDirectoryInfo() {
-        const selectElement = document.getElementById('directory-id');
-        const selectedOption = selectElement.options[selectElement.selectedIndex];
-        currentDealerUrl = selectedOption && selectedOption.dataset ? (selectedOption.dataset.url || '') : '';
-        document.getElementById('dealer-url').textContent = currentDealerUrl || 'Select a directory to generate content';
+        return;
     }
 
     function updateSeoCounters() {
@@ -191,15 +197,15 @@
     }
 
     function generateSeoContent() {
-        updateSelectedDirectoryInfo();
+        currentDealerWebsiteUrl = document.getElementById('dealer-website-url').value.trim();
 
-        if (!currentDealerName || !currentDealerUrl) {
-            document.getElementById('error-message').textContent = 'Please select a dealer and a directory before generating SEO content.';
+        if (!currentDealerName || !currentDealerWebsiteUrl) {
+            document.getElementById('error-message').textContent = 'Please enter a dealer website URL before generating SEO content.';
             document.getElementById('error-container').style.display = 'block';
             return;
         }
 
-        const generated = buildSeoContent(currentDealerName, currentDealerUrl);
+        const generated = buildSeoContent(currentDealerName, currentDealerWebsiteUrl);
         document.getElementById('seo-description').value = generated.description;
         document.getElementById('seo-meta-description').value = generated.metaDescription;
         document.getElementById('seo-keywords').value = generated.metaKeywords;
@@ -221,32 +227,60 @@
         const hostLabel = host.split('.')[0] || host || 'website';
         const dealerTerms = tokenizeContent(cleanDealerName);
         const hostTerms = tokenizeContent(hostLabel);
-        const keywordSet = new Set([
+        const keywordSet = new Set();
+        [
             cleanDealerName,
-            dealerTerms.join(' '),
             hostLabel,
             host,
             ...dealerTerms.slice(0, 6),
-            ...hostTerms.slice(0, 4),
+            ...hostTerms.slice(0, 6),
             'dealer',
             'auto',
-            'automotive'
-        ].filter(Boolean).map(value => value.toLowerCase()));
+            'automotive',
+            'inventory',
+            'service',
+            'sales'
+        ].filter(Boolean).forEach(value => keywordSet.add(String(value).toLowerCase()));
+
+        const openers = [
+            `${cleanDealerName} provides a modern online experience for shoppers and drivers.`,
+            `Visit ${cleanDealerName} online for dealership details, service options, and current updates.`,
+            `${cleanDealerName} helps customers explore vehicle information, support, and dealership resources.`,
+        ];
+        const benefits = [
+            `Learn more at ${host}.`,
+            `Discover dealership information through ${host}.`,
+            `Browse dealer details and updates on ${host}.`,
+        ];
+        const metaStarts = [
+            `Explore ${cleanDealerName} online for dealer details and helpful resources.`,
+            `Find ${cleanDealerName} on ${host} for dealership information and support.`,
+            `Visit ${cleanDealerName} at ${host} to view dealer details and updates.`,
+        ];
 
         const description = trimToLength(
-            `${cleanDealerName} features trusted dealer services, local expertise, and easy access through ${hostLabel}.`,
+            `${pick(openers)} ${pick(benefits)}`,
             200
         );
-        const metaDescription = trimToLength(
-            `Explore ${cleanDealerName} on ${host}. Find dealer details, helpful information, and an easy online experience.`,
-            200
-        );
+        const metaDescription = trimToLength(pick(metaStarts), 200);
 
         return {
             description,
             metaDescription,
             metaKeywords: Array.from(keywordSet).join(', ')
         };
+    }
+
+    function extractWebsiteUrl(value) {
+        const text = String(value || '').trim();
+        if (!text) return '';
+        if (/^https?:\/\//i.test(text)) return text;
+        if (text.includes('.')) return `https://${text.replace(/^\/+/, '')}`;
+        return '';
+    }
+
+    function pick(items) {
+        return items[Math.floor(Math.random() * items.length)];
     }
 
     function tokenizeContent(value) {
@@ -349,13 +383,13 @@
         document.getElementById('seo-description').value = '';
         document.getElementById('seo-meta-description').value = '';
         document.getElementById('seo-keywords').value = '';
+        document.getElementById('dealer-website-url').value = '';
         updateSeoCounters();
         document.getElementById('success-container').style.display = 'none';
         document.getElementById('dealer-details').style.display = 'none';
         document.getElementById('directory-select-container').style.display = 'none';
         currentDealerName = '';
-        currentDealerUrl = '';
-        document.getElementById('dealer-url').textContent = '';
+        currentDealerWebsiteUrl = '';
     }
 
     function escapeHtml(value) {

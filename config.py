@@ -7,6 +7,15 @@ import socket
 def _normalize_database_url(url):
     if not url:
         return None
+    if '://' in url and '@' in url:
+        scheme, remainder = url.split('://', 1)
+        if '@' in remainder:
+            credentials, host_part = remainder.rsplit('@', 1)
+            if ':' in credentials:
+                username, password = credentials.split(':', 1)
+                encoded_user = quote(username, safe='')
+                encoded_password = quote(password, safe='')
+                url = f'{scheme}://{encoded_user}:{encoded_password}@{host_part}'
     if url.startswith('postgres://'):
         return url.replace('postgres://', 'postgresql+psycopg2://', 1)
     if url.startswith('postgresql://'):
@@ -43,16 +52,6 @@ def _normalize_database_url(url):
         except Exception:
             # If resolution fails, fall back to the original URL
             pass
-    if parsed_url.hostname is None and '@' in url and '://' in url:
-        scheme, remainder = url.split('://', 1)
-        credentials, host_part = remainder.rsplit('@', 1)
-        if ':' in credentials:
-            username, password = credentials.split(':', 1)
-            encoded_user = quote(username, safe='')
-            encoded_password = quote(password, safe='')
-            url = f'{scheme}://{encoded_user}:{encoded_password}@{host_part}'
-            parsed_url = urlparse(url)
-
     if parsed_url.hostname and 'supabase.co' in parsed_url.hostname:
         query_params = dict(parse_qsl(parsed_url.query, keep_blank_values=True))
         query_params.setdefault('sslmode', 'require')

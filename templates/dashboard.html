@@ -46,7 +46,7 @@
                 <label style="font-size:0.9em; color:#666;">To</label>
                 <input type="date" id="activity-end" />
                 <button onclick="filterActivities()" style="padding:8px 10px; font-size:0.9em;">Filter</button>
-                <button onclick="loadAllActivities()" style="padding:8px 10px; font-size:0.9em;">View All (10 days)</button>
+                <button onclick="loadAllActivities()" style="padding:8px 10px; font-size:0.9em;">View All</button>
             </div>
         </div>
         <div id="recent-activities" style="margin-top: 15px;"></div>
@@ -202,8 +202,14 @@
             `;
         });
         html += '</div>';
-        // Show a small preview (first 7); backend already provides 7-preview by default
+        // Show a smaller preview to reduce visual clutter (first 5)
+        container.innerHTML = '';
         container.innerHTML = html;
+        // Trim to 5 preview items if more exist
+        const items = container.querySelectorAll('div[style*="border: 1px solid"]');
+        if (items.length > 5) {
+            for (let i = 5; i < items.length; i++) items[i].style.display = 'none';
+        }
     }
 
     function renderActivitiesList(activities) {
@@ -232,14 +238,15 @@
     }
 
     function loadAllActivities() {
-        // Load default last 10 days
+        // Load default last 10 days and show the 10 most recent records
         fetch('/api/activities', { credentials: 'same-origin' })
             .then(r => r.json())
             .then(data => {
                 if (!data.ok) {
                     throw new Error(data.error || 'Unable to load activities');
                 }
-                renderActivitiesList(data.activities);
+                const top10 = (data.activities || []).slice(0, 10);
+                renderActivitiesList(top10);
             })
             .catch(err => {
                 document.getElementById('recent-activities').innerHTML = `<div class="alert alert-error">${err.message}</div>`;

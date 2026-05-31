@@ -48,14 +48,6 @@ def read_local_excel(file_name, sheet_name=None, **read_kwargs):
         return None
 
 
-def build_placeholder_directory_url(name):
-    """Create a stable placeholder URL for directories that only exist in the dealer workbook."""
-    slug = re.sub(r'[^a-z0-9]+', '-', str(name).strip().lower()).strip('-')
-    if not slug:
-        slug = 'directory'
-    return f'https://{slug}.example'
-
-
 def guess_website_in_column(df, col_idx):
     """Heuristically find a website/URL for a dealer in the first few rows of the column."""
     max_search_rows = min(10, len(df))
@@ -267,16 +259,9 @@ def import_dealers_and_citations():
                     # Find the directory
                     directory = BacklinkDirectory.query.filter_by(name=citation_name).first()
                     if not directory:
-                        # Auto-create missing directories so dealer records are preserved.
-                        directory = BacklinkDirectory(
-                            name=citation_name,
-                            url=build_placeholder_directory_url(citation_name),
-                            active=True,
-                        )
-                        db.session.add(directory)
-                        db.session.flush()
-                        print(f"  Created missing directory '{citation_name}' for dealer {dealer_id}")
-                    elif not directory.active:
+                        print(f"  Skipping missing directory '{citation_name}' for dealer {dealer_id}")
+                        continue
+                    if not directory.active:
                         directory.active = True
 
                     # Check if citation already exists

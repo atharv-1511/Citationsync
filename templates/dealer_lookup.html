@@ -93,10 +93,19 @@
     function displayDealerInfo(dealer) {
         document.getElementById('dealer-name').textContent = dealer.name;
         document.getElementById('dealer-id-display').textContent = dealer.id;
-        const visibleCitations = (dealer.citations || []).filter(citation => {
-            const name = String(citation.directory_name || '').toLowerCase();
-            return !name.endsWith('.example');
-        });
+        const visibleCitations = (dealer.citations || [])
+            .filter(citation => {
+                const name = String(citation.directory_name || '').toLowerCase();
+                return !name.endsWith('.example');
+            })
+            .sort((a, b) => {
+                const aTime = new Date(a.created_at || 0).getTime();
+                const bTime = new Date(b.created_at || 0).getTime();
+                if (aTime !== bTime) {
+                    return aTime - bTime;
+                }
+                return Number(a.id || 0) - Number(b.id || 0);
+            });
         document.getElementById('total-citations').textContent = visibleCitations.length;
         
         const citationsList = document.getElementById('citations-list');
@@ -106,9 +115,9 @@
             return;
         }
         
-        let html = '<table><thead><tr><th>Citation</th><th>Built On</th><th>Added By</th><th>Notes</th><th>Status</th></tr></thead><tbody>';
+        let html = '<table><thead><tr><th>#</th><th>Citation</th><th>Built On</th><th>Added By</th><th>Notes</th><th>Status</th></tr></thead><tbody>';
         
-        visibleCitations.forEach(citation => {
+        visibleCitations.forEach((citation, index) => {
             const status = citation.is_recent ? 
                 '<span class="badge badge-warning">Recent (6mo)</span>' : 
                 '<span class="badge badge-success">Available</span>';
@@ -117,6 +126,7 @@
             
             html += `
                 <tr>
+                    <td>${index + 1}</td>
                     <td>${citation.directory_name}</td>
                     <td>${builtOn}</td>
                     <td>${citation.created_by || 'System'}</td>

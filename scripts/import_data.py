@@ -70,7 +70,7 @@ def guess_website_in_column(df, col_idx):
 
 
 def sync_backlink_directories():
-    """Sync backlink directories from the updated workbook and mark missing rows as removed."""
+    """Sync backlink directories from the updated workbook and remove anything not in the workbook."""
     print("Syncing backlink directories from the updated workbook...")
 
     df = read_local_excel(DIRECTORY_FILE, sheet_name='Sheet1', header=None)
@@ -112,13 +112,14 @@ def sync_backlink_directories():
             )
             db.session.add(directory)
 
+        removed_count = 0
         for directory_name, directory in existing_directories.items():
             if directory_name not in imported_names:
-                directory.active = False
+                db.session.delete(directory)
+                removed_count += 1
         
         db.session.commit()
         active_count = BacklinkDirectory.query.filter_by(active=True).count()
-        removed_count = BacklinkDirectory.query.filter_by(active=False).count()
         print(f"✓ Synced backlink directories from the updated workbook")
         print(f"  • Active directories: {active_count}")
         print(f"  • Removed directories: {removed_count}")

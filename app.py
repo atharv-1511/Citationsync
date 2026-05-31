@@ -12,6 +12,12 @@ from sqlalchemy import inspect, text, func
 from werkzeug.exceptions import HTTPException
 import os
 from datetime import datetime, timedelta, timezone
+import re
+import json
+import random
+from html import unescape
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 
 def get_current_user():
@@ -60,6 +66,268 @@ def serialize_activity(activity):
         'actor': activity.actor.full_name if activity.actor else 'System',
         'created_at': to_utc_iso(activity.created_at),
     }
+
+
+def _strip_html(value):
+    if not value:
+        return ''
+    cleaned = re.sub(r'<[^>]+>', ' ', value)
+    cleaned = unescape(cleaned)
+    return re.sub(r'\s+', ' ', cleaned).strip()
+
+
+def _normalize_url(value):
+    text_value = (value or '').strip()
+    if not text_value:
+        return None
+    if not re.match(r'^https?://', text_value, flags=re.I):
+        text_value = f'https://{text_value.lstrip("/")}'
+    return text_value
+
+
+def scrape_website_context(url, timeout=7):
+    """Fetch lightweight SEO context from the dealer website homepage."""
+    normalized = _normalize_url(url)
+    if not normalized:
+        return {
+            'ok': False,
+            'error': 'Missing website URL',
+            'website_url': None,
+        }
+
+    try:
+        request_obj = Request(
+            normalized,
+            headers={
+                'User-Agent': 'Mozilla/5.0 (compatible; CitationSyncBot/1.0; +https://example.com/bot)'
+            },
+        )
+        with urlopen(request_obj, timeout=timeout) as response:
+            final_url = response.geturl() or normalized
+            raw_html = response.read(250000)
+
+        html = raw_html.decode('utf-8', errors='ignore')
+        title_match = re.search(r'<title[^>]*>(.*?)</title>', html, flags=re.I | re.S)
+        meta_desc_match = re.search(
+            r'<meta[^>]+name=["\']description["\'][^>]+content=["\'](.*?)["\']',
+            html,
+            flags=re.I | re.S,
+        )
+        meta_keywords_match = re.search(
+            r'<meta[^>]+name=["\']keywords["\'][^>]+content=["\'](.*?)["\']',
+            html,
+            flags=re.I | re.S,
+        )
+        h1_match = re.search(r'<h1[^>]*>(.*?)</h1>', html, flags=re.I | re.S)
+
+        p_blocks = re.findall(r'<p[^>]*>(.*?)</p>', html, flags=re.I | re.S)
+        snippet_parts = [_strip_html(block) for block in p_blocks[:3]]
+        snippet = ' '.join([part for part in snippet_parts if part]).strip()
+
+        return {
+            'ok': True,
+            'website_url': final_url,
+            'title': _strip_html(title_match.group(1))[:200] if title_match else '',
+            'meta_description': _strip_html(meta_desc_match.group(1))[:300] if meta_desc_match else '',
+            'meta_keywords': _strip_html(meta_keywords_match.group(1))[:300] if meta_keywords_match else '',
+            'h1': _strip_html(h1_match.group(1))[:200] if h1_match else '',
+            'snippet': snippet[:350],
+        }
+    except Exception as exc:
+        return {
+            'ok': False,
+            'website_url': normalized,
+            'error': str(exc),
+        }
+
+
+def _tokenize_text(value):
+    return [
+        token.strip()
+        for token in re.sub(r'[^a-z0-9]+', ' ', str(value or '').lower()).split()
+        if token and len(token.strip()) > 2
+    ]
+
+
+def _trim_to_length(value, max_length=200):
+    text_value = str(value or '').strip()
+    if len(text_value) <= max_length:
+        return text_value
+    short = text_value[: max_length - 1].strip()
+    pivot = short.rfind(' ')
+    if pivot > 40:
+        short = short[:pivot].strip()
+    return f'{short}.'
+
+
+def build_local_seo_content(dealer_name, website_url, scraped_context=None, generation_index=1, regenerate=False):
+    """Create SEO content from dealer name + dealer website context with varied phrasing."""
+    clean_dealer_name = str(dealer_name or '').strip()
+    clean_url = _normalize_url(website_url) or ''
+
+    host = clean_url
+    try:
+        host = (urlparse(clean_url).hostname or clean_url).replace('www.', '')
+    except Exception:
+        host = clean_url.replace('https://', '').replace('http://', '').replace('www.', '').split('/')[0]
+
+    host_label = (host.split('.')[0] if host else 'website') or 'website'
+    scraped_context = scraped_context or {}
+
+    page_title = scraped_context.get('title') or clean_dealer_name
+    page_topic = scraped_context.get('h1') or 'vehicle sales and service'
+    page_snippet = scraped_context.get('meta_description') or scraped_context.get('snippet') or 'local dealership information and support'
+
+    dealer_terms = _tokenize_text(clean_dealer_name)
+    host_terms = _tokenize_text(host_label)
+    context_terms = _tokenize_text(' '.join([
+        scraped_context.get('title', ''),
+        scraped_context.get('h1', ''),
+        scraped_context.get('meta_description', ''),
+        scraped_context.get('meta_keywords', ''),
+        scraped_context.get('snippet', ''),
+    ]))
+
+    keyword_seed = [
+        clean_dealer_name,
+        host_label,
+        host,
+        *dealer_terms[:6],
+        *host_terms[:6],
+        *context_terms[:10],
+        'dealer',
+        'automotive',
+        'inventory',
+        'service',
+        'sales',
+    ]
+    keyword_set = []
+    seen = set()
+    for item in keyword_seed:
+        normalized = str(item or '').strip().lower()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        keyword_set.append(normalized)
+
+    random.shuffle(keyword_set)
+
+    openers = [
+        f'{clean_dealer_name} offers a customer-focused online experience for buyers and vehicle owners.',
+        f'{clean_dealer_name} gives drivers one place to explore inventory, services, and dealership support.',
+        f'Drivers can visit {clean_dealer_name} online to review dealership updates and automotive resources.',
+        f'{clean_dealer_name} presents dealership details clearly so customers can plan their next visit.',
+    ]
+    benefits = [
+        f'Learn more on {host} and explore {page_topic}.',
+        f'Use {host} to review dealership details and current customer information.',
+        f'Visit {host} for practical information about inventory, service, and support.',
+        f'Check {host} to see how {clean_dealer_name} supports local drivers.',
+    ]
+    meta_starts = [
+        f'Explore {clean_dealer_name} at {host} for trusted dealership details, inventory insights, and service support.',
+        f'Visit {clean_dealer_name} online to find dealership updates, customer resources, and local automotive information.',
+        f'{clean_dealer_name} shares practical dealership information through {host} for shoppers and owners.',
+        f'Find {clean_dealer_name} on {host} for dealership highlights, customer guidance, and automotive support.',
+    ]
+    unique_angles = [
+        f'Page focus: {page_title}.',
+        f'Website highlight: {page_topic}.',
+        f'Context clue: {_trim_to_length(page_snippet, 80)}',
+        f'Edition {generation_index}{"R" if regenerate else "G"} for unique phrasing.',
+    ]
+
+    description = _trim_to_length(f'{random.choice(openers)} {random.choice(benefits)} {random.choice(unique_angles)}', 200)
+    meta_description = _trim_to_length(f'{random.choice(meta_starts)} {random.choice(unique_angles)}', 200)
+    meta_keywords = ', '.join(keyword_set[:18])
+
+    return {
+        'description': description,
+        'meta_description': meta_description,
+        'meta_keywords': meta_keywords,
+    }
+
+
+def _extract_json_object(value):
+    if not value:
+        return None
+    match = re.search(r'\{[\s\S]*\}', value)
+    if not match:
+        return None
+    try:
+        return json.loads(match.group(0))
+    except Exception:
+        return None
+
+
+def generate_ai_seo_content(dealer_name, website_url, scraped_context, regenerate=False):
+    """Generate SEO content using OpenAI Chat Completions API when configured."""
+    api_key = os.getenv('OPENAI_API_KEY', '').strip()
+    if not api_key:
+        return None, 'OPENAI_API_KEY is not configured'
+
+    model = os.getenv('OPENAI_MODEL', 'gpt-4o-mini').strip() or 'gpt-4o-mini'
+    style_hint = 'Create an alternative phrasing and angle than previous attempts.' if regenerate else 'Create a high-quality first draft.'
+
+    prompt = (
+        'Generate JSON only with keys: description, meta_description, meta_keywords. '\
+        'Rules: description <= 200 chars, meta_description <= 200 chars, '\
+        'meta_keywords must be comma-separated and based on dealer name + website only. '\
+        'Do not mention citation directories. '\
+        f'Dealer Name: {dealer_name}. Website: {website_url}. '\
+        f'Website title: {scraped_context.get("title", "")}. '\
+        f'Website h1: {scraped_context.get("h1", "")}. '\
+        f'Website meta description: {scraped_context.get("meta_description", "")}. '\
+        f'Website snippet: {scraped_context.get("snippet", "")}. '\
+        f'{style_hint}'
+    )
+
+    payload = {
+        'model': model,
+        'messages': [
+            {'role': 'system', 'content': 'You are an SEO copywriter. Return strict JSON only.'},
+            {'role': 'user', 'content': prompt},
+        ],
+        'temperature': 1.0,
+        'response_format': {'type': 'json_object'},
+    }
+
+    try:
+        body = json.dumps(payload).encode('utf-8')
+        req = Request(
+            'https://api.openai.com/v1/chat/completions',
+            data=body,
+            method='POST',
+            headers={
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json',
+            },
+        )
+        with urlopen(req, timeout=20) as response:
+            response_payload = json.loads(response.read().decode('utf-8', errors='ignore'))
+
+        content = (
+            response_payload.get('choices', [{}])[0]
+            .get('message', {})
+            .get('content', '')
+        )
+        parsed = _extract_json_object(content)
+        if not parsed:
+            return None, 'AI response did not contain valid JSON content'
+
+        description = _trim_to_length(parsed.get('description', ''), 200)
+        meta_description = _trim_to_length(parsed.get('meta_description', ''), 200)
+        meta_keywords = str(parsed.get('meta_keywords', '')).strip()
+        if not description or not meta_description or not meta_keywords:
+            return None, 'AI response missing required fields'
+
+        return {
+            'description': description,
+            'meta_description': meta_description,
+            'meta_keywords': meta_keywords,
+        }, None
+    except Exception as exc:
+        return None, str(exc)
 
 
 def get_recent_dealers_page(page, per_page):
@@ -522,6 +790,105 @@ def register_routes(app):
             'suggestions': suggestions,
             'available_count': len(available)
         })
+
+    @app.route('/api/dealer/<dealer_id>/seo-context', methods=['GET'])
+    @login_required
+    def get_dealer_seo_context(dealer_id):
+        """Return dealer website context for SEO generation (independent of citation directory)."""
+        dealer = Dealer.query.filter_by(id=dealer_id).first()
+        if not dealer:
+            return jsonify({'error': 'Dealer not found'}), 404
+
+        requested_url = request.args.get('url', '').strip()
+        website_url = requested_url or (dealer.contact_info or '').strip()
+        normalized_url = _normalize_url(website_url)
+
+        if not normalized_url:
+            return jsonify({
+                'ok': False,
+                'dealer_id': dealer.id,
+                'dealer_name': dealer.name,
+                'website_url': None,
+                'error': 'Dealer website URL is missing'
+            }), 400
+
+        scraped = scrape_website_context(normalized_url)
+        return jsonify({
+            'ok': scraped.get('ok', False),
+            'dealer_id': dealer.id,
+            'dealer_name': dealer.name,
+            'website_url': scraped.get('website_url') or normalized_url,
+            'scraped': scraped,
+        }), 200
+
+    @app.route('/api/dealer/<dealer_id>/seo-generate', methods=['POST'])
+    @login_required
+    def generate_dealer_seo_content(dealer_id):
+        """Generate SEO content from dealer name + website context (optionally with ChatGPT API)."""
+        dealer = Dealer.query.filter_by(id=dealer_id).first()
+        if not dealer:
+            return jsonify({'error': 'Dealer not found'}), 404
+
+        data = request.get_json() or {}
+        requested_url = str(data.get('url', '') or '').strip()
+        requested_mode = str(data.get('mode', 'auto') or 'auto').strip().lower()
+        regenerate = bool(data.get('regenerate', False))
+        generation_index = int(data.get('generation_count', 1) or 1)
+
+        if requested_mode not in ('auto', 'ai', 'local'):
+            requested_mode = 'auto'
+
+        website_url = requested_url or (dealer.contact_info or '').strip()
+        normalized_url = _normalize_url(website_url)
+        if not normalized_url:
+            return jsonify({'ok': False, 'error': 'Dealer website URL is missing'}), 400
+
+        scraped = scrape_website_context(normalized_url)
+        effective_context = scraped if scraped.get('ok') else {
+            'title': '',
+            'meta_description': '',
+            'meta_keywords': '',
+            'h1': '',
+            'snippet': '',
+        }
+
+        local_generated = build_local_seo_content(
+            dealer.name,
+            normalized_url,
+            effective_context,
+            generation_index=generation_index,
+            regenerate=regenerate,
+        )
+
+        used_mode = 'local'
+        warning = None
+        generated = local_generated
+
+        if requested_mode in ('auto', 'ai'):
+            ai_generated, ai_error = generate_ai_seo_content(
+                dealer.name,
+                normalized_url,
+                effective_context,
+                regenerate=regenerate,
+            )
+            if ai_generated:
+                generated = ai_generated
+                used_mode = 'ai'
+            elif requested_mode == 'ai':
+                warning = f'AI mode unavailable: {ai_error}. Falling back to local generation.'
+            elif ai_error:
+                warning = f'AI fallback not used: {ai_error}'
+
+        return jsonify({
+            'ok': True,
+            'dealer_id': dealer.id,
+            'dealer_name': dealer.name,
+            'website_url': scraped.get('website_url') or normalized_url,
+            'mode': used_mode,
+            'warning': warning,
+            'generated': generated,
+            'scraped': scraped,
+        }), 200
     
     @app.route('/api/citation/add', methods=['POST'])
     @login_required

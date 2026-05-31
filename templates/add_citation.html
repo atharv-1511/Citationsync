@@ -43,6 +43,7 @@
             <label for="dealer-website-url">Dealer Website URL:</label>
             <input type="url" id="dealer-website-url" placeholder="Enter the dealer website URL" />
             <div style="font-size:0.85em; color:#666; margin-top:4px;">Used to generate SEO content for the dealer website.</div>
+            <div id="seo-context-status" style="font-size:0.85em; color:#666; margin-top:4px;"></div>
         </div>
 
         <div style="margin: 18px 0; padding: 16px; border: 1px solid var(--border-color); border-radius: 10px; background: #fafbfe;">
@@ -50,8 +51,16 @@
                 <div>
                     <h4 style="margin:0 0 4px 0;">SEO Content Generator</h4>
                     <p style="margin:0; color:#666; font-size:0.92em;">Generate page copy from the dealer name and website URL.</p>
+                    <label style="display:inline-flex; gap:6px; align-items:center; margin-top:8px; font-size:0.88em; color:#444;">
+                        <input type="checkbox" id="seo-use-ai" checked>
+                        Use ChatGPT API when configured (falls back to local generator)
+                    </label>
                 </div>
-                <button type="button" onclick="generateSeoContent()" style="padding:8px 12px; font-size:0.92em; width:auto;">Generate SEO Content</button>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button type="button" onclick="refreshSeoContext()" style="padding:8px 12px; font-size:0.92em; width:auto;">Refresh Website Context</button>
+                    <button type="button" onclick="generateSeoContent(false)" style="padding:8px 12px; font-size:0.92em; width:auto;">Generate SEO Content</button>
+                    <button type="button" onclick="generateSeoContent(true)" style="padding:8px 12px; font-size:0.92em; width:auto;">Regenerate</button>
+                </div>
             </div>
 
             <div class="form-group" style="margin-top:16px;">
@@ -89,6 +98,8 @@
     let allDirectories = [];
     let currentDealerName = '';
     let currentDealerWebsiteUrl = '';
+    let currentSeoContext = null;
+    let generationCount = 0;
 
     // Load all directories on page load
     document.addEventListener('DOMContentLoaded', function() {
@@ -108,6 +119,8 @@
             document.getElementById('directory-select-container').style.display = 'none';
             currentDealerName = '';
             currentDealerWebsiteUrl = '';
+            currentSeoContext = null;
+            document.getElementById('seo-context-status').textContent = '';
             return;
         }
 
@@ -133,6 +146,8 @@
                 currentDealerName = data.name || '';
                 currentDealerWebsiteUrl = extractWebsiteUrl(data.contact_info || '');
                 document.getElementById('dealer-website-url').value = currentDealerWebsiteUrl;
+                currentSeoContext = null;
+                fetchSeoContext(dealerId);
 
                 loadAvailableDirectories(dealerId);
             })
@@ -183,6 +198,8 @@
     document.getElementById('directory-id').addEventListener('change', updateSelectedDirectoryInfo);
     document.getElementById('dealer-website-url').addEventListener('input', function() {
         currentDealerWebsiteUrl = this.value.trim();
+        currentSeoContext = null;
+        document.getElementById('seo-context-status').textContent = 'Website changed. Click Refresh Website Context to scrape latest page details.';
     });
     document.getElementById('seo-description').addEventListener('input', updateSeoCounters);
     document.getElementById('seo-meta-description').addEventListener('input', updateSeoCounters);
@@ -196,8 +213,54 @@
         document.getElementById('seo-meta-description-count').textContent = document.getElementById('seo-meta-description').value.length;
     }
 
-    function generateSeoContent() {
+    function fetchSeoContext(dealerId) {
+        const statusEl = document.getElementById('seo-context-status');
+        const website = document.getElementById('dealer-website-url').value.trim();
+
+        if (!dealerId) {
+            return Promise.resolve(null);
+        }
+
+        statusEl.textContent = 'Scraping dealer website context...';
+        const query = website ? `?url=${encodeURIComponent(website)}` : '';
+
+        return fetch(`/api/dealer/${dealerId}/seo-context${query}`, { credentials: 'same-origin' })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.ok || !data.scraped) {
+                    statusEl.textContent = `Website context unavailable: ${data.error || 'Could not scrape website'}`;
+                    currentSeoContext = null;
+                    return null;
+                }
+
+                currentSeoContext = data.scraped;
+                currentDealerWebsiteUrl = data.website_url || website;
+                document.getElementById('dealer-website-url').value = currentDealerWebsiteUrl;
+                statusEl.textContent = 'Website context loaded. SEO content now uses dealer name + dealer website only.';
+                return currentSeoContext;
+            })
+            .catch(error => {
+                statusEl.textContent = `Website context error: ${error.message}`;
+                currentSeoContext = null;
+                return null;
+            });
+    }
+
+    function refreshSeoContext() {
+        const dealerId = document.getElementById('dealer-id').value.trim();
+        if (!dealerId) {
+            document.getElementById('error-message').textContent = 'Enter Dealer ID first.';
+            document.getElementById('error-container').style.display = 'block';
+            return;
+        }
+        fetchSeoContext(dealerId);
+    }
+
+    function generateSeoContent(isRegeneration) {
         currentDealerWebsiteUrl = document.getElementById('dealer-website-url').value.trim();
+        const dealerId = document.getElementById('dealer-id').value.trim();
+        const useAi = document.getElementById('seo-use-ai').checked;
+        const statusEl = document.getElementById('seo-context-status');
 
         if (!currentDealerName || !currentDealerWebsiteUrl) {
             document.getElementById('error-message').textContent = 'Please enter a dealer website URL before generating SEO content.';
@@ -205,15 +268,79 @@
             return;
         }
 
-        const generated = buildSeoContent(currentDealerName, currentDealerWebsiteUrl);
-        document.getElementById('seo-description').value = generated.description;
-        document.getElementById('seo-meta-description').value = generated.metaDescription;
-        document.getElementById('seo-keywords').value = generated.metaKeywords;
-        updateSeoCounters();
-        document.getElementById('error-container').style.display = 'none';
+        if (!dealerId) {
+            document.getElementById('error-message').textContent = 'Please enter Dealer ID first.';
+            document.getElementById('error-container').style.display = 'block';
+            return;
+        }
+
+        const runGeneration = () => {
+            const nextGeneration = generationCount + 1;
+            statusEl.textContent = 'Generating SEO content...';
+
+            fetch(`/api/dealer/${dealerId}/seo-generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    url: currentDealerWebsiteUrl,
+                    regenerate: !!isRegeneration,
+                    generation_count: nextGeneration,
+                    mode: useAi ? 'auto' : 'local'
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.ok || !data.generated) {
+                        throw new Error(data.error || 'Unable to generate SEO content from API');
+                    }
+
+                    generationCount = nextGeneration;
+                    const generated = data.generated;
+                    document.getElementById('seo-description').value = generated.description || '';
+                    document.getElementById('seo-meta-description').value = generated.meta_description || '';
+                    document.getElementById('seo-keywords').value = generated.meta_keywords || '';
+                    updateSeoCounters();
+                    document.getElementById('error-container').style.display = 'none';
+
+                    if (data.scraped && data.scraped.ok && data.website_url) {
+                        currentDealerWebsiteUrl = data.website_url;
+                        document.getElementById('dealer-website-url').value = currentDealerWebsiteUrl;
+                    }
+
+                    const modeLabel = data.mode === 'ai' ? 'ChatGPT API' : 'local generator';
+                    statusEl.textContent = data.warning
+                        ? `${modeLabel} used. ${data.warning}`
+                        : `${modeLabel} used. Content generated from dealer name + dealer website context.`;
+                })
+                .catch(error => {
+                    // Last-resort local client fallback for resilience.
+                    generationCount = nextGeneration;
+                    const generated = buildSeoContent(
+                        currentDealerName,
+                        currentDealerWebsiteUrl,
+                        currentSeoContext,
+                        generationCount,
+                        isRegeneration
+                    );
+                    document.getElementById('seo-description').value = generated.description;
+                    document.getElementById('seo-meta-description').value = generated.metaDescription;
+                    document.getElementById('seo-keywords').value = generated.metaKeywords;
+                    updateSeoCounters();
+                    document.getElementById('error-container').style.display = 'none';
+                    statusEl.textContent = `Fallback local generation used: ${error.message}`;
+                });
+        };
+
+        if (!currentSeoContext && dealerId) {
+            fetchSeoContext(dealerId).finally(runGeneration);
+            return;
+        }
+
+        runGeneration();
     }
 
-    function buildSeoContent(dealerName, websiteUrl) {
+    function buildSeoContent(dealerName, websiteUrl, seoContext, generationIndex, isRegeneration) {
         const cleanDealerName = String(dealerName || '').trim();
         const cleanWebsiteUrl = String(websiteUrl || '').trim();
 
@@ -227,6 +354,20 @@
         const hostLabel = host.split('.')[0] || host || 'website';
         const dealerTerms = tokenizeContent(cleanDealerName);
         const hostTerms = tokenizeContent(hostLabel);
+        const contextTerms = tokenizeContent([
+            seoContext && seoContext.title,
+            seoContext && seoContext.h1,
+            seoContext && seoContext.meta_description,
+            seoContext && seoContext.meta_keywords,
+            seoContext && seoContext.snippet
+        ].filter(Boolean).join(' '));
+
+        const pageTitle = seoContext && seoContext.title ? seoContext.title : cleanDealerName;
+        const pageTopic = seoContext && seoContext.h1 ? seoContext.h1 : 'vehicle sales and service';
+        const pageSnippet = seoContext && seoContext.meta_description
+            ? seoContext.meta_description
+            : (seoContext && seoContext.snippet ? seoContext.snippet : 'local dealership information and support');
+
         const keywordSet = new Set();
         [
             cleanDealerName,
@@ -234,6 +375,7 @@
             host,
             ...dealerTerms.slice(0, 6),
             ...hostTerms.slice(0, 6),
+            ...contextTerms.slice(0, 10),
             'dealer',
             'auto',
             'automotive',
@@ -243,31 +385,48 @@
         ].filter(Boolean).forEach(value => keywordSet.add(String(value).toLowerCase()));
 
         const openers = [
-            `${cleanDealerName} provides a modern online experience for shoppers and drivers.`,
-            `Visit ${cleanDealerName} online for dealership details, service options, and current updates.`,
-            `${cleanDealerName} helps customers explore vehicle information, support, and dealership resources.`,
+            `${cleanDealerName} offers a customer-focused online experience for buyers and vehicle owners.`,
+            `${cleanDealerName} gives drivers one place to explore inventory, services, and dealership support.`,
+            `Drivers can visit ${cleanDealerName} online to review dealership updates and automotive resources.`,
+            `${cleanDealerName} presents dealership details clearly so customers can plan their next visit.`,
         ];
         const benefits = [
-            `Learn more at ${host}.`,
-            `Discover dealership information through ${host}.`,
-            `Browse dealer details and updates on ${host}.`,
+            `Learn more on ${host} and explore ${pageTopic}.`,
+            `Use ${host} to review dealership details and current customer information.`,
+            `Visit ${host} for practical information about inventory, service, and support.`,
+            `Check ${host} to see how ${cleanDealerName} supports local drivers.`,
         ];
         const metaStarts = [
-            `Explore ${cleanDealerName} online for dealer details and helpful resources.`,
-            `Find ${cleanDealerName} on ${host} for dealership information and support.`,
-            `Visit ${cleanDealerName} at ${host} to view dealer details and updates.`,
+            `Explore ${cleanDealerName} at ${host} for trusted dealership details, inventory insights, and service support.`,
+            `Visit ${cleanDealerName} online to find dealership updates, customer resources, and local automotive information.`,
+            `${cleanDealerName} shares practical dealership information through ${host} for shoppers and owners.`,
+            `Find ${cleanDealerName} on ${host} for dealership highlights, customer guidance, and automotive support.`,
+        ];
+
+        const uniqueAngles = [
+            `Page focus: ${pageTitle}.`,
+            `Website highlight: ${pageTopic}.`,
+            `Context clue: ${trimToLength(pageSnippet, 80)}`,
+            `Edition ${generationIndex}${isRegeneration ? 'R' : 'G'} for unique phrasing.`,
         ];
 
         const description = trimToLength(
-            `${pick(openers)} ${pick(benefits)}`,
+            `${pick(openers)} ${pick(benefits)} ${pick(uniqueAngles)}`,
             200
         );
-        const metaDescription = trimToLength(pick(metaStarts), 200);
+
+        const metaDescription = trimToLength(
+            `${pick(metaStarts)} ${pick(uniqueAngles)}`,
+            200
+        );
+
+        const shuffledKeywords = shuffle(Array.from(keywordSet));
+        const metaKeywords = shuffledKeywords.slice(0, 18).join(', ');
 
         return {
             description,
             metaDescription,
-            metaKeywords: Array.from(keywordSet).join(', ')
+            metaKeywords
         };
     }
 
@@ -281,6 +440,15 @@
 
     function pick(items) {
         return items[Math.floor(Math.random() * items.length)];
+    }
+
+    function shuffle(values) {
+        const arr = values.slice();
+        for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
     }
 
     function tokenizeContent(value) {
@@ -390,6 +558,9 @@
         document.getElementById('directory-select-container').style.display = 'none';
         currentDealerName = '';
         currentDealerWebsiteUrl = '';
+        currentSeoContext = null;
+        generationCount = 0;
+        document.getElementById('seo-context-status').textContent = '';
     }
 
     function escapeHtml(value) {

@@ -55,6 +55,27 @@ def build_placeholder_directory_url(name):
     return f'https://{slug}.example'
 
 
+def guess_website_in_column(df, col_idx):
+    """Heuristically find a website/URL for a dealer in the first few rows of the column."""
+    max_search_rows = min(10, len(df))
+    for row_idx in range(2, max_search_rows):
+        try:
+            val = df.iloc[row_idx, col_idx]
+        except Exception:
+            continue
+        if pd.isna(val):
+            continue
+        s = str(val).strip()
+        if not s:
+            continue
+        # crude URL detection: contains protocol or a host-like token (contains a dot, no spaces)
+        if re.search(r'https?://', s, flags=re.I) or ('.' in s and ' ' not in s):
+            if not re.search(r'https?://', s, flags=re.I):
+                s = 'https://' + s.lstrip('/')
+            return s
+    return None
+
+
 def sync_backlink_directories():
     """Sync backlink directories from the updated workbook and mark missing rows as removed."""
     print("Syncing backlink directories from the updated workbook...")
@@ -128,9 +149,32 @@ def import_dealers_and_citations():
         return False
     
     try:
-        # First row contains dealer IDs, second contains names, rest are citations
+        # First row contains dealer IDs. Some workbooks have websites in row 1 and names in row 2.
         dealer_ids = df.iloc[0].values
-        dealer_names = df.iloc[1].values
+
+        # Heuristic: check if row 1 looks like websites (many values containing 'http' or a dot)
+        def row_looks_like_urls(row):
+            tokens = 0
+            total = 0
+            for v in row:
+                total += 1
+                try:
+                    s = str(v).strip()
+                except Exception:
+                    continue
+                if not s or s.lower() == 'nan':
+                    continue
+                if re.search(r'https?://', s, flags=re.I) or ('.' in s and ' ' not in s):
+                    tokens += 1
+            return tokens >= max(3, int(total * 0.5))
+
+        website_row_idx = None
+        names_row_idx = 1
+        if len(df) > 1 and row_looks_like_urls(df.iloc[1].values):
+            website_row_idx = 1
+            names_row_idx = 2 if len(df) > 2 else 1
+
+        dealer_names = df.iloc[names_row_idx].values
 
         # Import dealers (skip NaN values)
         dealers_imported = 0
@@ -151,8 +195,7 @@ def import_dealers_and_citations():
             if not dealer_name or dealer_name.lower() == 'nan':
                 dealer_name = dealer_id
 
-            if Dealer.query.filter_by(name=dealer_name).first() and not Dealer.query.filter_by(id=dealer_id).first():
-                dealer_name = dealer_id
+            # Do not replace dealer name with the ID or website — keep the provided name.
             
             # Check if dealer exists
             existing_dealer = Dealer.query.filter_by(id=dealer_id).first()
@@ -162,12 +205,48 @@ def import_dealers_and_citations():
             if existing_dealer:
                 dealer = existing_dealer
             else:
+                # Try to detect a website/url for this dealer from the workbook rows
+                detected_website = None
+                # Prefer explicit website row if present
+                if website_row_idx is not None:
+                    try:
+                        raw = df.iloc[website_row_idx, col_idx]
+                        if not pd.isna(raw) and str(raw).strip():
+                            s = str(raw).strip()
+                            if not re.search(r'https?://', s, flags=re.I):
+                                s = 'https://' + s.lstrip('/')
+                            detected_website = s
+                    except Exception:
+                        detected_website = None
+
+                if not detected_website:
+                    detected_website = guess_website_in_column(df, col_idx)
+
                 dealer = db.session.merge(Dealer(
                     id=dealer_id,
                     name=dealer_name,
-                    contact_info=None
+                    contact_info=detected_website
                 ))
                 dealers_imported += 1
+            # If dealer exists already, prefer to populate contact_info if missing
+            if existing_dealer and not existing_dealer.contact_info:
+                # Populate missing contact_info from explicit website row or heuristic
+                detected_website = None
+                if website_row_idx is not None:
+                    try:
+                        raw = df.iloc[website_row_idx, col_idx]
+                        if not pd.isna(raw) and str(raw).strip():
+                            s = str(raw).strip()
+                            if not re.search(r'https?://', s, flags=re.I):
+                                s = 'https://' + s.lstrip('/')
+                            detected_website = s
+                    except Exception:
+                        detected_website = None
+                if not detected_website:
+                    detected_website = guess_website_in_column(df, col_idx)
+                if detected_website:
+                    existing_dealer.contact_info = detected_website
+                    db.session.add(existing_dealer)
 
             if dealers_imported % 10 == 0 or col_idx % 10 == 0:
                 print(f"  Processing dealer column {col_idx + 1}/{len(dealer_ids)}: {dealer_id}")

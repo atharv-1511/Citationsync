@@ -6,7 +6,7 @@
 <div class="card">
     <h2>Welcome to CitationSync</h2>
     <p style="margin-top: 10px; color: #666; line-height: 1.6;">
-        This system helps you manage backlink citations for your cafes efficiently. 
+        This system helps you manage backlink citations for your dealers efficiently. 
         It keeps citation history organized, shows what has already been built, and
         surfaces what is available next.
     </p>
@@ -21,7 +21,7 @@
 <div class="grid">
     <div class="stat-box" id="stat-dealers">
         <h3>0</h3>
-        <p>Total Cafes</p>
+        <p>Total Dealers</p>
     </div>
     <div class="stat-box" id="stat-directories">
         <h3>0</h3>
@@ -36,21 +36,21 @@
 <div class="card" style="margin-top: 30px;">
     <h3>Quick Start Guide</h3>
     <ol style="margin-top: 15px; margin-left: 20px; line-height: 1.8;">
-        <li><strong>Find Cafes:</strong> Enter a cafe ID to view citation history and available citations</li>
+        <li><strong>Find Dealers:</strong> Enter a dealer ID to view citation history and available citations</li>
         <li><strong>Get Suggestions:</strong> The system will show every citation they haven't used in the last 6 months</li>
         <li><strong>Add Citation:</strong> Once you've built a citation, record it to keep the database updated</li>
-        <li><strong>Check Dashboard:</strong> View overall statistics and identify cafes needing citations</li>
+        <li><strong>Check Dashboard:</strong> View overall statistics and identify dealers needing citations</li>
     </ol>
 </div>
 
 <div class="card" style="margin-top: 20px;">
     <h3>Key Features</h3>
     <ul style="margin-top: 15px; margin-left: 20px; line-height: 1.8;">
-        <li>Centralized cafe and citation database</li>
+        <li>Centralized dealer and citation database</li>
         <li>6-month recency rule to prevent citation repetition</li>
         <li>Intelligent suggestion algorithm</li>
         <li>Complete audit trail with timestamps</li>
-        <li>Quick lookup by cafe ID</li>
+        <li>Quick lookup by dealer ID</li>
         <li>Monthly citation tracking</li>
     </ul>
 </div>
@@ -85,10 +85,10 @@
                 return response.json();
             })
             .then(data => {
-                document.getElementById('stat-dealers').innerHTML = `<h3>${data.total_dealers}</h3><p>Total Cafes</p>`;
+                document.getElementById('stat-dealers').innerHTML = `<h3>${data.total_dealers}</h3><p>Total Dealers</p>`;
                 document.getElementById('stat-directories').innerHTML = `<h3>${data.total_directories}</h3><p>Backlink Directories</p>`;
                 document.getElementById('stat-citations').innerHTML = `<h3>${data.total_citations}</h3><p>Citations Built</p>`;
-                statsBannerText.textContent = `Updated just now. ${data.total_dealers} cafes, ${data.total_directories} directories, ${data.total_citations} citations.`;
+                statsBannerText.textContent = `Updated just now. ${data.total_dealers} dealers, ${data.total_directories} directories, ${data.total_citations} citations.`;
             })
             .catch(error => {
                 console.error('Error loading stats:', error);

@@ -5,7 +5,7 @@
 {% block content %}
 <div class="card">
     <h2>Add New Citation</h2>
-    <p style="color: #666; margin-top: 10px;">Record a new citation that has been built for a cafe.</p>
+    <p style="color: #666; margin-top: 10px;">Record a new citation that has been built for a dealer.</p>
     {% if current_user %}
     <p style="color: #666; margin-top: 10px; font-size: 0.95em;">Signed in as {{ current_user.full_name }}</p>
     {% endif %}
@@ -13,12 +13,12 @@
 
 <div class="card">
     <div class="form-group">
-        <label for="dealer-id">Cafe ID:</label>
-        <input type="text" id="dealer-id" placeholder="Enter cafe ID" required>
+        <label for="dealer-id">Dealer ID:</label>
+        <input type="text" id="dealer-id" placeholder="Enter dealer ID" required>
     </div>
 
     <div id="dealer-details" style="display: none; margin-bottom: 20px;">
-        <p><strong>Cafe Name:</strong> <span id="dealer-name"></span></p>
+        <p><strong>Dealer Name:</strong> <span id="dealer-name"></span></p>
         <p><strong>Total Citations Built:</strong> <span id="total-citations"></span></p>
     </div>
 
@@ -81,8 +81,8 @@
             .then(data => {
                 document.getElementById('directory-loading').style.display = 'none';
                 
-                if (data.error) {
-                    document.getElementById('error-message').textContent = `Cafe not found: ${data.error}`;
+                    if (data.error) {
+                    document.getElementById('error-message').textContent = `Dealer not found: ${data.error}`;
                     document.getElementById('error-container').style.display = 'block';
                     document.getElementById('dealer-details').style.display = 'none';
                     document.getElementById('directory-select-container').style.display = 'none';
@@ -144,7 +144,7 @@
         const notes = document.getElementById('notes').value.trim();
 
         if (!dealerId || !directoryId) {
-            document.getElementById('error-message').textContent = 'Please select both cafe and directory';
+            document.getElementById('error-message').textContent = 'Please select both dealer and directory';
             document.getElementById('error-container').style.display = 'block';
             return;
         }
@@ -174,7 +174,7 @@
             document.getElementById('success-message').innerHTML = `
                 <div style="width: 100%;">
                     <h4 style="margin-bottom: 5px; color: #155724; font-size: 1.1em;">Citation added successfully!</h4>
-                    <p style="margin-bottom: 5px; color: #155724;"><strong>${data.citation.directory_name}</strong> for cafe <strong>${data.citation.dealer_id}</strong></p>
+                    <p style="margin-bottom: 5px; color: #155724;"><strong>${data.citation.directory_name}</strong> for dealer <strong>${data.citation.dealer_id}</strong></p>
                     ${data.citation.notes ? `<p style="margin-bottom: 5px; color: #155724;"><strong>Notes:</strong> ${escapeHtml(data.citation.notes)}</p>` : ''}
                     <p style="font-size: 0.85em; opacity: 0.9; color: #155724;">Added by <strong>${data.citation.created_by || 'System'}</strong></p>
                 </div>

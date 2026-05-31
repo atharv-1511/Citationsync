@@ -1,23 +1,23 @@
 {% extends "base.html" %}
 
-{% block title %}Find Cafes - CitationSync{% endblock %}
+{% block title %}Find Dealers - CitationSync{% endblock %}
 
 {% block content %}
 <div class="card">
-    <h2>Find Cafe Information</h2>
-    <p style="color: #666; margin-top: 10px;">Enter a cafe ID to view citation history and see all available citations.</p>
+    <h2>Find Dealer Information</h2>
+    <p style="color: #666; margin-top: 10px;">Enter a dealer ID to view citation history and see all available citations.</p>
 </div>
 
 <div class="card">
     <div class="form-group">
-        <label for="dealer-id">Cafe ID:</label>
-        <input type="text" id="dealer-id" placeholder="Enter cafe ID (e.g., 20000)" required>
+        <label for="dealer-id">Dealer ID:</label>
+        <input type="text" id="dealer-id" placeholder="Enter dealer ID (e.g., 20000)" required>
     </div>
-    <button onclick="searchDealer()">Search Cafes</button>
+    <button onclick="searchDealer()">Search Dealers</button>
 </div>
 
 <div id="result-container" style="display: none;">
-    <!-- Cafe Info -->
+    <!-- Dealer Info -->
     <div class="card" id="dealer-info">
         <h3 id="dealer-name"></h3>
         <p style="color: #666; margin-top: 10px;">
@@ -45,7 +45,7 @@
 
 <div id="loading" class="loading" style="display: none;">
     <div class="spinner"></div>
-    <p>Loading cafe information...</p>
+    <p>Loading dealer information...</p>
 </div>
 
 <script>
@@ -53,7 +53,7 @@
         const dealerId = document.getElementById('dealer-id').value.trim();
         
         if (!dealerId) {
-            showError('Please enter a cafe ID');
+            showError('Please enter a dealer ID');
             return;
         }
         
@@ -86,7 +86,7 @@
             document.getElementById('error-container').style.display = 'none';
         })
         .catch(error => {
-            showError('Error loading cafe information: ' + error.message);
+            showError('Error loading dealer information: ' + error.message);
         });
     }
 
@@ -151,7 +151,7 @@
         
         html += '</tbody></table>';
         html += `<p style="color: #666; margin-top: 15px; font-size: 0.9em;">
-                    ${data.available_count} total directories available for this cafe
+                    ${data.available_count} total directories available for this dealer
                 </p>`;
         
         suggestionsList.innerHTML = html;

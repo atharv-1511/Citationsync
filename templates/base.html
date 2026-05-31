@@ -473,7 +473,7 @@
             <div class="header-top">
                 <div>
                     <h1>CitationSync</h1>
-                    <p>Manage backlink citations for your cafes efficiently</p>
+                    <p>Manage backlink citations for your dealers efficiently</p>
                 </div>
                 <button class="mobile-menu-btn" onclick="toggleMenu()" aria-label="Toggle Menu">
                     <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
@@ -488,7 +488,7 @@
 
         <nav id="mobile-nav">
             <a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}class="active"{% endif %}>Home</a>
-            <a href="{{ url_for('dealer_page') }}" {% if request.endpoint == 'dealer_page' %}class="active"{% endif %}>Find Cafes</a>
+            <a href="{{ url_for('dealer_page') }}" {% if request.endpoint == 'dealer_page' %}class="active"{% endif %}>Find Dealers</a>
             <a href="{{ url_for('add_citation_page') }}" {% if request.endpoint == 'add_citation_page' %}class="active"{% endif %}>Add Citation</a>
             <a href="{{ url_for('dashboard_page') }}" {% if request.endpoint == 'dashboard_page' %}class="active"{% endif %}>Dashboard</a>
             {% if is_admin_user %}
@@ -515,7 +515,7 @@
         <div id="mobile-overlay" class="mobile-overlay" onclick="toggleMenu()"></div>
 
         <footer>
-            <p>&copy; 2026 CitationSync | Created by <a href="https://atharvraskar.vercel.app/" target="_blank" rel="noopener noreferrer">Atharv</a></p>
+            <p>&copy; 2026 CitationSync</p>
         </footer>
     </div>
 

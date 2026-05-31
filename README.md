@@ -119,7 +119,7 @@ Exports citation data to Excel
 1. Install dependencies
 2. Run `python scripts/import_data.py`
 3. Launch `python app.py`
-4. Test with dealer ID 20000 (Brew Haven Cafe)
+4. Test with dealer ID 20000 (Brew Haven - example dealer)
 
 ## Cleanup Note
 

@@ -469,7 +469,7 @@ def register_routes(app):
         dealer = Dealer.query.filter_by(id=dealer_id).first()
         
         if not dealer:
-            return jsonify({'error': 'Cafe not found'}), 404
+            return jsonify({'error': 'Dealer not found'}), 404
         
         # Get all citations for this dealer
         citations = Citation.query.filter_by(dealer_id=dealer_id).all()
@@ -495,11 +495,11 @@ def register_routes(app):
     @app.route('/api/dealer/<dealer_id>/suggestions', methods=['GET'])
     @login_required
     def get_suggestions(dealer_id):
-        """Get suggested citations for a cafe (respecting 6-month rule)"""
+        """Get suggested citations for a dealer (respecting 6-month rule)"""
         dealer = Dealer.query.filter_by(id=dealer_id).first()
         
         if not dealer:
-            return jsonify({'error': 'Cafe not found'}), 404
+            return jsonify({'error': 'Dealer not found'}), 404
         
         # Get available citations
         available = dealer.get_available_citations(months=6)
@@ -531,7 +531,7 @@ def register_routes(app):
         
         # Validate input
         if not data or 'dealer_id' not in data or 'directory_id' not in data:
-            return jsonify({'error': 'Missing cafe_id or directory_id'}), 400
+            return jsonify({'error': 'Missing dealer_id or directory_id'}), 400
         
         dealer_id = data.get('dealer_id')
         directory_id = data.get('directory_id')
@@ -539,7 +539,7 @@ def register_routes(app):
         # Verify dealer exists
         dealer = Dealer.query.filter_by(id=dealer_id).first()
         if not dealer:
-            return jsonify({'error': 'Cafe not found'}), 404
+            return jsonify({'error': 'Dealer not found'}), 404
         
         # Verify directory exists
         directory = BacklinkDirectory.query.filter_by(id=directory_id).first()
@@ -553,7 +553,7 @@ def register_routes(app):
         ).first()
         
         if existing:
-            return jsonify({'error': 'Citation already exists for this cafe'}), 409
+            return jsonify({'error': 'Citation already exists for this dealer'}), 409
         
         # Create new citation
         citation = Citation(
@@ -569,7 +569,7 @@ def register_routes(app):
         log_activity(
             'created',
             'citation',
-            f'{get_current_user().full_name} added citation {citation.directory.name} for cafe {dealer_id}' + (f' with notes: {citation.notes}' if citation.notes else '.'),
+            f'{get_current_user().full_name} added citation {citation.directory.name} for dealer {dealer_id}' + (f' with notes: {citation.notes}' if citation.notes else '.'),
             actor=get_current_user(),
             entity_id=citation.id,
         )
@@ -710,7 +710,21 @@ def register_routes(app):
                 })
 
         pagination, dealers = get_recent_dealers_page(page, per_page)
-        activities = ActivityLog.query.order_by(ActivityLog.created_at.desc()).limit(8).all()
+        activities = ActivityLog.query.order_by(ActivityLog.created_at.desc()).limit(7).all()
+
+        # Include active and removed directories for dashboard
+        active_dirs = BacklinkDirectory.query.filter_by(active=True).order_by(BacklinkDirectory.name).all()
+        removed_dirs = BacklinkDirectory.query.filter_by(active=False).order_by(BacklinkDirectory.updated_at.desc()).all()
+
+        def serialize_directory(d):
+            return {
+                'id': d.id,
+                'name': d.name,
+                'url': d.url,
+                'citation_count': d.citations.count(),
+                'created_by': d.created_by.full_name if d.created_by else 'System',
+                'updated_at': to_utc_iso(d.updated_at)
+            }
 
         return jsonify({
             'ok': True,
@@ -730,6 +744,10 @@ def register_routes(app):
             'pages': pagination.pages,
             'current_page': page,
             'recent_activities': [serialize_activity(activity) for activity in activities],
+            'directories': {
+                'active': [serialize_directory(d) for d in active_dirs],
+                'removed': [serialize_directory(d) for d in removed_dirs],
+            },
         })
     
     @app.route('/api/directories', methods=['GET'])
@@ -746,6 +764,41 @@ def register_routes(app):
                 'citation_count': d.citations.count(),
                 'created_by': d.created_by.full_name if d.created_by else 'System'
             } for d in directories]
+        })
+
+
+    @app.route('/api/activities', methods=['GET'])
+    @login_required
+    def get_activities():
+        """Fetch activities within a date range. Defaults to last 10 days."""
+        # Accept start and end as ISO dates (YYYY-MM-DD) or full ISO datetimes
+        start = request.args.get('start')
+        end = request.args.get('end')
+
+        try:
+            if start:
+                start_dt = datetime.fromisoformat(start)
+            else:
+                start_dt = datetime.utcnow() - timedelta(days=10)
+
+            if end:
+                end_dt = datetime.fromisoformat(end)
+            else:
+                end_dt = datetime.utcnow()
+        except Exception:
+            return jsonify({'success': False, 'error': 'Invalid date format. Use ISO format YYYY-MM-DD or full ISO datetime.'}), 400
+
+        activities = ActivityLog.query.filter(
+            ActivityLog.created_at >= start_dt,
+            ActivityLog.created_at <= end_dt
+        ).order_by(ActivityLog.created_at.desc()).all()
+
+        return jsonify({
+            'ok': True,
+            'start': to_utc_iso(start_dt),
+            'end': to_utc_iso(end_dt),
+            'count': len(activities),
+            'activities': [serialize_activity(a) for a in activities]
         })
     
     @app.errorhandler(404)

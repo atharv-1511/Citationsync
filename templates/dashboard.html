@@ -20,7 +20,7 @@
     <div class="grid">
         <div class="stat-box">
             <h3 id="stat-dealers">0</h3>
-            <p>Total Cafes</p>
+            <p>Total Dealers</p>
         </div>
         <div class="stat-box">
             <h3 id="stat-directories">0</h3>
@@ -32,20 +32,36 @@
         </div>
         <div class="stat-box">
             <h3 id="stat-avg">0</h3>
-            <p>Avg Citations/Cafe</p>
+            <p>Avg Citations/Dealer</p>
         </div>
     </div>
 
     <!-- Recent Activities -->
     <div class="card" style="margin-top: 30px;">
-        <h3>Recent Activities</h3>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+            <h3 style="margin:0">Recent Activities</h3>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <label style="font-size:0.9em; color:#666;">From</label>
+                <input type="date" id="activity-start" />
+                <label style="font-size:0.9em; color:#666;">To</label>
+                <input type="date" id="activity-end" />
+                <button onclick="filterActivities()" style="padding:8px 10px; font-size:0.9em;">Filter</button>
+                <button onclick="loadAllActivities()" style="padding:8px 10px; font-size:0.9em;">View All (10 days)</button>
+            </div>
+        </div>
         <div id="recent-activities" style="margin-top: 15px;"></div>
     </div>
 
     <!-- All Dealers -->
     <div class="card" style="margin-top: 30px;">
-        <h3>All Cafes</h3>
+        <h3>All Dealers</h3>
         <div id="all-dealers" style="margin-top: 15px;"></div>
+    </div>
+
+    <!-- Backlink Directories -->
+    <div class="card" style="margin-top: 30px;">
+        <h3>Backlink Directories</h3>
+        <div id="directories-section" style="margin-top: 15px;"></div>
     </div>
 </div>
 
@@ -71,6 +87,7 @@
                 }
                 displayStats(summary.stats);
                 displayAllDealers(summary);
+                displayDirectories(summary.directories || {active: [], removed: []});
                 displayRecentActivities(summary.recent_activities || []);
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('dashboard-content').style.display = 'block';
@@ -98,7 +115,7 @@
             return;
         }
 
-        let html = '<div style="overflow-x: auto;"><table><thead><tr><th>Cafe ID</th><th>Cafe Name</th><th>Total Citations</th><th>This Month</th></tr></thead><tbody>';
+        let html = '<div style="overflow-x: auto;"><table><thead><tr><th>Dealer ID</th><th>Dealer Name</th><th>Total Citations</th><th>This Month</th></tr></thead><tbody>';
         
         data.dealers.forEach(dealer => {
             html += `
@@ -127,11 +144,72 @@
         container.innerHTML = html;
     }
 
+    function displayDirectories(directories) {
+        const container = document.getElementById('directories-section');
+        if (!directories) {
+            container.innerHTML = '<p style="color:#999;">No directories available.</p>';
+            return;
+        }
+
+        let html = '<div style="display:flex; gap:20px; flex-wrap:wrap;">';
+        // Active
+        html += '<div style="flex:1; min-width:280px;">';
+        html += '<h4 style="margin-top:0;">Active Directories</h4>';
+        if (directories.active.length === 0) html += '<p style="color:#999;">None</p>'; else {
+            html += '<ul style="list-style:none; padding-left:0;">';
+            directories.active.forEach(d => {
+                html += `<li style="padding:6px 0; border-bottom:1px solid var(--border-color);"><a href="${d.url}" target="_blank" rel="noopener noreferrer">${escapeHtml(d.name)}</a> <span style="color:#666; font-size:0.9em;">(${d.citation_count})</span></li>`;
+            });
+            html += '</ul>';
+        }
+        html += '</div>';
+
+        // Removed
+        html += '<div style="flex:1; min-width:280px;">';
+        html += '<h4 style="margin-top:0;">Removed Directories</h4>';
+        if (directories.removed.length === 0) html += '<p style="color:#999;">None</p>'; else {
+            html += '<ul style="list-style:none; padding-left:0;">';
+            directories.removed.forEach(d => {
+                html += `<li style="padding:6px 0; border-bottom:1px solid var(--border-color);">${escapeHtml(d.name)} <span style="color:#666; font-size:0.9em;">(Removed)</span></li>`;
+            });
+            html += '</ul>';
+        }
+        html += '</div>';
+
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
     function displayRecentActivities(activities) {
         const container = document.getElementById('recent-activities');
 
         if (!activities || activities.length === 0) {
             container.innerHTML = '<p style="color: #999;">No recent activity yet.</p>';
+            return;
+        }
+        let html = '<div style="display: grid; gap: 12px;">';
+        activities.forEach(activity => {
+            html += `
+                <div style="border: 1px solid var(--border-color); border-radius: 8px; padding: 14px 16px; background: #fafbfe;">
+                    <div style="display:flex; justify-content:space-between; gap: 12px; flex-wrap: wrap;">
+                        <strong>${escapeHtml(activity.actor)}</strong>
+                        <span style="color:#666; font-size:0.9em;">${formatActivityTime(activity.created_at)}</span>
+                    </div>
+                    <div style="margin-top: 6px; color: var(--text-main);">
+                        ${escapeHtml(activity.description)}
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        // Show a small preview (first 7); backend already provides 7-preview by default
+        container.innerHTML = html;
+    }
+
+    function renderActivitiesList(activities) {
+        const container = document.getElementById('recent-activities');
+        if (!activities || activities.length === 0) {
+            container.innerHTML = '<p style="color: #999;">No activities found for the selected range.</p>';
             return;
         }
 
@@ -151,6 +229,41 @@
         });
         html += '</div>';
         container.innerHTML = html;
+    }
+
+    function loadAllActivities() {
+        // Load default last 10 days
+        fetch('/api/activities', { credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.ok) {
+                    throw new Error(data.error || 'Unable to load activities');
+                }
+                renderActivitiesList(data.activities);
+            })
+            .catch(err => {
+                document.getElementById('recent-activities').innerHTML = `<div class="alert alert-error">${err.message}</div>`;
+            });
+    }
+
+    function filterActivities() {
+        const start = document.getElementById('activity-start').value;
+        const end = document.getElementById('activity-end').value;
+
+        if (!start || !end) {
+            alert('Please choose both start and end dates to filter.');
+            return;
+        }
+
+        fetch(`/api/activities?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, { credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.ok) throw new Error(data.error || 'Unable to load activities');
+                renderActivitiesList(data.activities);
+            })
+            .catch(err => {
+                document.getElementById('recent-activities').innerHTML = `<div class="alert alert-error">${err.message}</div>`;
+            });
     }
 
     function formatActivityTime(timestamp) {

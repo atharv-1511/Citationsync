@@ -64,7 +64,8 @@ class Dealer(db.Model):
         
         available = BacklinkDirectory.query.filter(
             BacklinkDirectory.id.notin_(recent_dir_ids),
-            BacklinkDirectory.active == True
+            BacklinkDirectory.active == True,
+            ~BacklinkDirectory.url.ilike('%.example')
         ).all()
         
         return available

@@ -861,6 +861,7 @@ def register_routes(app):
         
         # Get available citations
         available = dealer.get_available_citations(months=6)
+        available = [directory for directory in available if not str(directory.url or '').lower().endswith('.example')]
         
         if len(available) == 0:
             return jsonify({

@@ -102,9 +102,9 @@
                 const aTime = new Date(a.created_at || 0).getTime();
                 const bTime = new Date(b.created_at || 0).getTime();
                 if (aTime !== bTime) {
-                    return aTime - bTime;
+                    return bTime - aTime;
                 }
-                return Number(a.id || 0) - Number(b.id || 0);
+                return Number(b.id || 0) - Number(a.id || 0);
             });
         document.getElementById('total-citations').textContent = visibleCitations.length;
         

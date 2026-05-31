@@ -34,51 +34,50 @@
             </select>
         </div>
 
-        <div class="form-group">
-            <label for="notes">Notes (Optional):</label>
-            <textarea id="notes" placeholder="Add any notes about this citation" rows="3"></textarea>
-        </div>
+        <details style="margin: 18px 0; padding: 14px 16px; border: 1px solid var(--border-color); border-radius: 10px; background: #fafbfe;">
+            <summary style="cursor:pointer; font-weight:600; list-style:none;">
+                SEO Content Generator
+            </summary>
+            <div style="margin-top:14px; display:grid; gap:12px;">
+                <div class="form-group" style="margin:0;">
+                    <label for="dealer-website-url">Dealer Website URL:</label>
+                    <input type="url" id="dealer-website-url" placeholder="Enter the dealer website URL" />
+                </div>
 
-        <div class="form-group">
-            <label for="dealer-website-url">Dealer Website URL:</label>
-            <input type="url" id="dealer-website-url" placeholder="Enter the dealer website URL" />
-            <div style="font-size:0.85em; color:#666; margin-top:4px;">Used to generate SEO content for the dealer website.</div>
-            <div id="seo-context-status" style="font-size:0.85em; color:#666; margin-top:4px;"></div>
-        </div>
-
-        <div style="margin: 18px 0; padding: 16px; border: 1px solid var(--border-color); border-radius: 10px; background: #fafbfe;">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
-                <div>
-                    <h4 style="margin:0 0 4px 0;">SEO Content Generator</h4>
-                    <p style="margin:0; color:#666; font-size:0.92em;">Generate page copy from the dealer name and website URL.</p>
-                    <label style="display:inline-flex; gap:6px; align-items:center; margin-top:8px; font-size:0.88em; color:#444;">
+                <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+                    <button type="button" onclick="refreshSeoContext()" style="padding:8px 12px; font-size:0.92em; width:auto;">Refresh Website Context</button>
+                    <button type="button" onclick="generateSeoContent(false)" style="padding:8px 12px; font-size:0.92em; width:auto;">Generate</button>
+                    <button type="button" onclick="generateSeoContent(true)" style="padding:8px 12px; font-size:0.92em; width:auto;">Regenerate</button>
+                    <label style="display:inline-flex; gap:6px; align-items:center; font-size:0.88em; color:#444; margin-left:auto;">
                         <input type="checkbox" id="seo-use-ai" checked>
-                        Use ChatGPT API when configured (falls back to local generator)
+                        Use ChatGPT API when available
                     </label>
                 </div>
-                <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                    <button type="button" onclick="refreshSeoContext()" style="padding:8px 12px; font-size:0.92em; width:auto;">Refresh Website Context</button>
-                    <button type="button" onclick="generateSeoContent(false)" style="padding:8px 12px; font-size:0.92em; width:auto;">Generate SEO Content</button>
-                    <button type="button" onclick="generateSeoContent(true)" style="padding:8px 12px; font-size:0.92em; width:auto;">Regenerate</button>
+
+                <div id="seo-context-status" style="font-size:0.85em; color:#666;"></div>
+
+                <div class="form-group" style="margin:0;">
+                    <label for="seo-description">Short Description:</label>
+                    <textarea id="seo-description" placeholder="Generate a short description" rows="4" maxlength="200"></textarea>
+                    <div style="font-size:0.85em; color:#666; margin-top:4px;"><span id="seo-description-count">0</span>/200 characters</div>
+                </div>
+
+                <div class="form-group" style="margin:0;">
+                    <label for="seo-meta-description">Meta Description:</label>
+                    <textarea id="seo-meta-description" placeholder="Generate a meta description" rows="3" maxlength="200"></textarea>
+                    <div style="font-size:0.85em; color:#666; margin-top:4px;"><span id="seo-meta-description-count">0</span>/200 characters</div>
+                </div>
+
+                <div class="form-group" style="margin:0;">
+                    <label for="seo-keywords">Meta Keywords:</label>
+                    <textarea id="seo-keywords" placeholder="Generate comma-separated keywords" rows="3"></textarea>
                 </div>
             </div>
+        </details>
 
-            <div class="form-group" style="margin-top:16px;">
-                <label for="seo-description">Description (under 200 characters):</label>
-                <textarea id="seo-description" placeholder="Generate a short description" rows="3" maxlength="200"></textarea>
-                <div style="font-size:0.85em; color:#666; margin-top:4px;"><span id="seo-description-count">0</span>/200 characters</div>
-            </div>
-
-            <div class="form-group">
-                <label for="seo-meta-description">Meta Description (under 200 characters):</label>
-                <textarea id="seo-meta-description" placeholder="Generate a meta description" rows="3" maxlength="200"></textarea>
-                <div style="font-size:0.85em; color:#666; margin-top:4px;"><span id="seo-meta-description-count">0</span>/200 characters</div>
-            </div>
-
-            <div class="form-group" style="margin-bottom:0;">
-                <label for="seo-keywords">Meta Keywords (comma-separated):</label>
-                <textarea id="seo-keywords" placeholder="Generate comma-separated keywords" rows="3"></textarea>
-            </div>
+        <div class="form-group" style="margin-top:16px;">
+            <label for="notes">Notes (Optional):</label>
+            <textarea id="notes" placeholder="Add any notes about this citation" rows="3"></textarea>
         </div>
 
         <button onclick="addCitation()">Add Citation</button>
@@ -253,7 +252,9 @@
             document.getElementById('error-container').style.display = 'block';
             return;
         }
-        fetchSeoContext(dealerId);
+        fetchSeoContext(dealerId).then(() => {
+            generateSeoContent(true);
+        });
     }
 
     function generateSeoContent(isRegeneration) {

@@ -2,6 +2,10 @@ import os
 from datetime import datetime
 from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
 import socket
+from dotenv import load_dotenv
+
+
+load_dotenv()
 
 
 def _normalize_database_url(url):

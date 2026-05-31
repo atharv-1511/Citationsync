@@ -177,9 +177,13 @@ def _trim_to_word_range(value, min_words=50, max_words=80):
 def _dedupe_keywords(keywords, min_count=15, max_count=25):
     ordered = []
     seen = set()
+    stopwords = {
+        'and', 'the', 'for', 'with', 'from', 'that', 'this', 'your', 'our', 'their',
+        'home', 'page', 'website', 'site', 'dealer', 'dealership', 'auto', 'automotive',
+    }
     for keyword in keywords:
         normalized = re.sub(r'\s+', ' ', str(keyword or '').strip().lower())
-        if not normalized or normalized in seen:
+        if not normalized or normalized in seen or normalized in stopwords:
             continue
         seen.add(normalized)
         ordered.append(normalized)
@@ -253,49 +257,63 @@ def build_local_seo_content(dealer_name, website_url, scraped_context=None, gene
     keyword_set = _dedupe_keywords(keyword_seed, min_count=15, max_count=25)
     random.shuffle(keyword_set)
 
-    openers = [
-        'This dealership offers a customer-focused online experience for buyers and vehicle owners.',
-        'Drivers can explore inventory, services, and dealership support through this dealership website.',
-        'Visitors can review dealership updates and automotive resources in one convenient place.',
-        'The website presents dealership details clearly so customers can plan their next visit.',
+    opening_options = [
+        'This dealership website presents a clear shopping experience for drivers comparing vehicles, services, and ownership support.',
+        'Visitors can use the website to review inventory details, financing paths, and service resources in one convenient place.',
+        'The site is designed to help shoppers evaluate vehicles, explore support options, and understand the dealership offering.',
+        'Online visitors can quickly find information about available vehicles, finance opportunities, and maintenance support.',
     ]
-    benefits = [
-        f'Learn more on {host} and explore {page_topic}.',
-        f'Use {host} to review inventory, finance options, and customer support.',
-        f'Visit {host} for practical information about inventory, service, and support.',
-        f'Check {host} for shopping tools, service details, and helpful resources.',
+    service_options = [
+        f'The homepage and supporting pages highlight useful information about {page_topic.lower()} and the broader customer journey.',
+        f'The website content suggests attention to inventory browsing, financing assistance, and service scheduling for customers.',
+        f'Useful sections on {host} help visitors understand vehicle choices, support options, and the buying process.',
+        f'The site provides a practical overview of services that matter to shoppers, including sales support and post-purchase care.',
     ]
-    meta_starts = [
-        f'Explore this dealership at {host} for trusted inventory, finance, and service information.',
-        f'Visit the website for dealership updates, customer resources, and automotive support.',
-        f'This dealership shares practical shopping and service information through {host}.',
-        f'Find helpful dealership information on {host} for shoppers and owners.',
+    inventory_options = [
+        'Relevant inventory details and shopping tools help users compare options before reaching out for the next step.',
+        'The overall structure supports search visibility for vehicle listings, finance information, and service-related pages.',
+        'Content on the site appears organized for customers seeking model information, service details, and dealership assistance.',
+        'Clear page messaging helps prospective buyers and owners move through discovery, service, and follow-up actions.',
     ]
-    unique_angles = [
-        f'Page focus: {page_title}.',
-        f'Website highlight: {page_topic}.',
-        f'Context clue: {_trim_to_length(page_snippet, 80)}',
-        f'Edition {generation_index}{"R" if regenerate else "G"} for unique phrasing.',
+    closing_options = [
+        f'The web presence feels built for practical dealership research, with emphasis on helpful, easy-to-navigate information from {host}.',
+        f'Overall, the site supports customer decision-making with relevant dealership details and a useful online experience from {host}.',
+        f'This online presence is suited to shoppers looking for vehicle options, finance support, and service information.',
+        f'The website gives customers a simple path to explore offerings and move confidently toward the right dealership action.',
     ]
 
-    description = _trim_to_word_range(
-        _remove_dealer_name(f'{random.choice(openers)} {random.choice(benefits)} {random.choice(unique_angles)}', clean_dealer_name),
-        50,
-        80,
+    description = _remove_dealer_name(
+        ' '.join([
+            random.choice(opening_options),
+            random.choice(service_options),
+            random.choice(inventory_options),
+            random.choice(closing_options),
+        ]),
+        clean_dealer_name,
     )
-    meta_description = _trim_to_length(
-        _remove_dealer_name(f'{random.choice(meta_starts)} {random.choice(unique_angles)}', clean_dealer_name),
-        160,
-    )
+    description = re.sub(r'\s+', ' ', description).strip()
+    description = _trim_to_word_range(description, 50, 80)
     if _word_count(description) < 50:
         description = _trim_to_word_range(
-            _remove_dealer_name(
-                f'{random.choice(openers)} {random.choice(benefits)} {random.choice(unique_angles)} {random.choice(benefits)}',
-                clean_dealer_name,
-            ),
+            f'{description} The website supports vehicle shoppers with practical sales, financing, and service information while keeping the experience straightforward and informative.',
             50,
             80,
         )
+
+    meta_description_options = [
+        f'Explore inventory, financing, and service information on {host} for a focused dealership experience.',
+        f'Visit {host} to review vehicle options, financing support, and service details in a clear online format.',
+        f'Use {host} to compare vehicles, learn about support options, and discover dealership resources.',
+        f'Find practical dealership information on {host} covering sales, financing, and service support.',
+    ]
+    meta_description = _remove_dealer_name(random.choice(meta_description_options), clean_dealer_name)
+    meta_description = _trim_to_length(meta_description, 160)
+    if len(meta_description) < 140:
+        meta_description = _trim_to_length(
+            f'{meta_description} Browse current inventory, financing details, and service information to support your next dealership visit.',
+            160,
+        )
+
     meta_keywords = ', '.join(keyword_set[:25])
 
     return {
@@ -327,23 +345,19 @@ def generate_ai_seo_content(dealer_name, website_url, scraped_context, regenerat
     style_hint = 'Create a new angle and phrasing than previous attempts.' if regenerate else 'Create a strong first draft.'
 
     prompt = (
-        'Use the following prompt as the base for SEO content generation. '\
-        'You will receive a dealer name and website URL. Visit the website and write SEO content. '\
-        'Return JSON only with keys: description, meta_description, meta_keywords. '\
-        'Requirements: '\
-        '1) Short Description must be 50-80 words. '\
-        '2) Meta Description must be 140-160 characters. '\
-        '3) Meta Keywords must contain 15-25 relevant keywords separated by commas. '\
-        'Guidelines: analyze the website before writing; focus on vehicle sales, financing, service, maintenance, and genuine parts only if available; do not include address; '\
-        'do not repeat the dealership name within the content; avoid location targeting or proximity phrases like near me, nearby, serving the area; keep it natural, unique, and SEO-friendly; '\
-        'do not keyword-stuff; keywords must be based on the actual services and inventory offered on the website. '\
-        'Dealer name and website are inputs for analysis only. '\
-        f'Dealer Name: {dealer_name}. Website: {website_url}. '\
-        f'Website title: {scraped_context.get("title", "")}. '\
-        f'Website h1: {scraped_context.get("h1", "")}. '\
-        f'Website meta description: {scraped_context.get("meta_description", "")}. '\
-        f'Website meta keywords: {scraped_context.get("meta_keywords", "")}. '\
-        f'Website snippet: {scraped_context.get("snippet", "")}. '\
+        'Draft a short description, META Keywords, and META Description. Keep the point in mind: Less proximity, no repetition of dealer name, no address. '
+        'Include services, parts only if available. Read the link I provided and provide the content. Return JSON only with keys: description, meta_description, meta_keywords. '
+        'Requirements: 1) Short Description must be 50-80 words. 2) Meta Description must be 140-160 characters. 3) Meta Keywords must contain 15-25 relevant keywords separated by commas. '
+        'Guidelines: analyze the website before writing; focus on vehicle sales, financing, service, maintenance, and genuine parts only if available; do not include address; '
+        'do not repeat the dealership name within the content; avoid location targeting or proximity phrases like near me, nearby, serving the area; keep it natural, unique, and SEO-friendly; '
+        'do not keyword-stuff; keywords must be based on the actual services and inventory offered on the website. '
+        'Dealer name and website are inputs for analysis only. '
+        f'Name: {dealer_name}. Website: {website_url}. '
+        f'Website title: {scraped_context.get("title", "")}. '
+        f'Website h1: {scraped_context.get("h1", "")}. '
+        f'Website meta description: {scraped_context.get("meta_description", "")}. '
+        f'Website meta keywords: {scraped_context.get("meta_keywords", "")}. '
+        f'Website snippet: {scraped_context.get("snippet", "")}. '
         f'{style_hint}'
     )
 

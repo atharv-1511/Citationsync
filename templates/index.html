@@ -12,10 +12,61 @@
     </p>
 </div>
 
-<div id="db-banner" class="card" style="display:none; margin-top: 20px;"></div>
+<style>
+.mac-notification {
+    background: rgba(255, 255, 255, 0.70);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+    display: flex;
+    align-items: flex-start;
+    gap: 15px;
+    transform: translateX(120%);
+    animation: slideIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+@keyframes slideIn {
+    to { transform: translateX(0); }
+}
+.mac-icon {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-color);
+    box-shadow: 0 0 8px var(--accent-color);
+    flex-shrink: 0;
+    margin-top: 6px;
+}
+.mac-icon.success { background: #2e7d32; box-shadow: 0 0 8px rgba(46,125,50,0.6); }
+.mac-icon.warning { background: #d32f2f; box-shadow: 0 0 8px rgba(211,47,47,0.6); }
+.mac-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.mac-content strong {
+    color: #1a1a1a;
+    font-size: 0.9em;
+    font-weight: 600;
+}
+.mac-content span {
+    color: #555;
+    font-size: 0.8em;
+    line-height: 1.4;
+}
+</style>
 
-<div id="stats-banner" class="card" style="margin-top: 20px; background: #fafbfe; border-left: 6px solid var(--accent-color);">
-    <strong>Live stats:</strong> <span id="stats-banner-text">Loading current database totals...</span>
+<div id="notifications-container" style="position: fixed; bottom: 30px; right: 30px; z-index: 9999; display: flex; flex-direction: column-reverse; gap: 10px; width: 320px;">
+    <div id="db-banner" class="mac-notification" style="display:none;"></div>
+    <div id="stats-banner" class="mac-notification" style="display:none;">
+        <div class="mac-icon success"></div>
+        <div class="mac-content">
+            <strong>System Status</strong>
+            <span id="stats-banner-text">Loading metrics...</span>
+        </div>
+    </div>
 </div>
 
 <div class="grid">
@@ -64,15 +115,11 @@
             .then(response => response.json())
             .then(status => {
                 const banner = document.getElementById('db-banner');
-                banner.style.display = 'block';
+                banner.style.display = 'flex';
                 if (status.ok && status.database_env_present && status.database && status.database.startsWith('postgresql')) {
-                    banner.innerHTML = '<strong>Database spark:</strong> The data engine is awake and the app is running smoothly.';
-                    banner.style.borderLeft = '6px solid #2e7d32';
-                    banner.style.background = '#f1f8f4';
+                    banner.innerHTML = '<div class="mac-icon success"></div><div class="mac-content"><strong>Database Connected</strong><span>The database engine is online and fully operational.</span></div>';
                 } else {
-                    banner.innerHTML = '<strong>Database fallback:</strong> Vercel is not passing a Supabase <code>DATABASE_URL</code> to the app yet.';
-                    banner.style.borderLeft = '6px solid #d32f2f';
-                    banner.style.background = '#fff4f4';
+                    banner.innerHTML = '<div class="mac-icon warning"></div><div class="mac-content"><strong>Connection Issue</strong><span>Database URL environment variable is missing.</span></div>';
                 }
             })
             .catch(error => console.error('Error loading db status:', error));
@@ -88,10 +135,12 @@
                 document.getElementById('stat-dealers').innerHTML = `<h3>${data.total_dealers}</h3><p>Total Dealers</p>`;
                 document.getElementById('stat-directories').innerHTML = `<h3>${data.total_directories}</h3><p>Backlink Directories</p>`;
                 document.getElementById('stat-citations').innerHTML = `<h3>${data.total_citations}</h3><p>Citations Built</p>`;
+                document.getElementById('stats-banner').style.display = 'flex';
                 statsBannerText.textContent = `Updated just now. ${data.total_dealers} dealers, ${data.total_directories} directories, ${data.total_citations} citations.`;
             })
             .catch(error => {
                 console.error('Error loading stats:', error);
+                document.getElementById('stats-banner').style.display = 'flex';
                 statsBannerText.textContent = 'Could not load live totals. Showing the last rendered values on the page.';
             });
     });

@@ -34,27 +34,31 @@
             </select>
         </div>
 
-        <details style="margin: 18px 0; padding: 14px 16px; border: 1px solid var(--border-color); border-radius: 10px; background: #fafbfe;">
-            <summary style="cursor:pointer; font-weight:600; list-style:none;">
-                SEO Content Generator
+        <details style="margin: 25px 0; border: 1px solid var(--border-color); border-radius: 12px; background: #f8fafd; box-shadow: 0 4px 15px rgba(0,0,0,0.02); overflow: hidden;">
+            <summary style="cursor:pointer; font-weight:700; padding: 18px 20px; background: white; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; font-size: 1.05em; color: var(--primary-color);">
+                ✨ SEO Content Generator
             </summary>
-            <div style="margin-top:14px; display:grid; gap:12px;">
+            <div style="padding: 24px; display:grid; gap:20px;">
                 <div class="form-group" style="margin:0;">
                     <label for="dealer-website-url">Dealer Website URL:</label>
-                    <input type="url" id="dealer-website-url" placeholder="Enter the dealer website URL" />
+                    <div style="display: flex; gap: 10px;">
+                        <input type="url" id="dealer-website-url" placeholder="https://example.com" style="flex: 1;" />
+                        <button type="button" onclick="refreshSeoContext()" style="padding: 14px 20px; font-size: 0.95em; width: auto; background: var(--primary-color); white-space: nowrap;">Refresh Context</button>
+                    </div>
                 </div>
 
-                <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
-                    <button type="button" onclick="refreshSeoContext()" style="padding:8px 12px; font-size:0.92em; width:auto;">Refresh Website Context</button>
-                    <button type="button" onclick="generateSeoContent(false)" style="padding:8px 12px; font-size:0.92em; width:auto;">Generate</button>
-                    <button type="button" onclick="generateSeoContent(true)" style="padding:8px 12px; font-size:0.92em; width:auto;">Regenerate</button>
-                    <label style="display:inline-flex; gap:6px; align-items:center; font-size:0.88em; color:#444; margin-left:auto;">
-                        <input type="checkbox" id="seo-use-ai" checked>
-                        Use ChatGPT API when available
+                <div style="display:flex; justify-content: space-between; align-items:center; background: #fff; padding: 12px 18px; border-radius: 8px; border: 1px solid var(--border-color); flex-wrap: wrap; gap: 15px;">
+                    <label style="display:flex; gap:8px; align-items:center; font-size:0.95em; color:#444; cursor: pointer; font-weight: 500;">
+                        <input type="checkbox" id="seo-use-ai" checked style="width: auto;">
+                        Use AI Generation
                     </label>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="button" onclick="generateSeoContent(false)" style="padding:10px 20px; font-size:0.95em; width:auto;">Generate</button>
+                        <button type="button" onclick="generateSeoContent(true)" style="padding:10px 20px; font-size:0.95em; width:auto; background: #6c757d; box-shadow: none;">Regenerate</button>
+                    </div>
                 </div>
 
-                <div id="seo-context-status" style="font-size:0.85em; color:#666;"></div>
+                <div id="seo-context-status" style="font-size:0.9em; color:#0056b3; background: #e6f2ff; padding: 10px 15px; border-radius: 6px; display: none;"></div>
 
                 <div class="form-group" style="margin:0;">
                     <label for="seo-description">Short Description:</label>
@@ -198,6 +202,7 @@
     document.getElementById('dealer-website-url').addEventListener('input', function() {
         currentDealerWebsiteUrl = this.value.trim();
         currentSeoContext = null;
+        document.getElementById('seo-context-status').style.display = 'block';
         document.getElementById('seo-context-status').textContent = 'Website changed. Click Refresh Website Context to scrape latest page details.';
     });
     document.getElementById('seo-description').addEventListener('input', updateSeoCounters);
@@ -220,6 +225,7 @@
             return Promise.resolve(null);
         }
 
+        statusEl.style.display = 'block';
         statusEl.textContent = 'Scraping dealer website context...';
         const query = website ? `?url=${encodeURIComponent(website)}` : '';
 

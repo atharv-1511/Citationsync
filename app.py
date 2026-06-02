@@ -19,6 +19,7 @@ from collections import OrderedDict
 from html import unescape
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
+from dotenv import load_dotenv
 
 
 def get_current_user():
@@ -336,6 +337,7 @@ def _extract_json_object(value):
 
 
 def _get_gemini_api_key():
+    load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
     for env_name in ('GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GENAI_API_KEY'):
         value = os.getenv(env_name, '').strip()
         if value:

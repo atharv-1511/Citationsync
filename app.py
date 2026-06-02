@@ -19,7 +19,7 @@ from collections import OrderedDict
 from html import unescape
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
-from dotenv import load_dotenv
+from dotenv import load_dotenv, dotenv_values
 
 
 def get_current_user():
@@ -337,11 +337,28 @@ def _extract_json_object(value):
 
 
 def _get_gemini_api_key():
-    load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
-    for env_name in ('GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GENAI_API_KEY'):
+    env_candidates = ('GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GENAI_API_KEY')
+    env_paths = [
+        os.path.join(os.path.dirname(__file__), '.env'),
+        os.path.join(os.getcwd(), '.env'),
+    ]
+
+    for path in env_paths:
+        if not os.path.exists(path):
+            continue
+
+        values = dotenv_values(path)
+        for env_name in env_candidates:
+            value = (values.get(env_name) or os.getenv(env_name) or '').strip()
+            if value:
+                os.environ[env_name] = value
+                return value
+
+    for env_name in env_candidates:
         value = os.getenv(env_name, '').strip()
         if value:
             return value
+
     return ''
 
 

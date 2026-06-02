@@ -293,7 +293,7 @@
                     url: currentDealerWebsiteUrl,
                     regenerate: !!isRegeneration,
                     generation_count: nextGeneration,
-                    mode: useAi ? 'auto' : 'local'
+                    mode: useAi ? 'ai' : 'local'
                 })
             })
                 .then(response => response.json())
@@ -321,7 +321,14 @@
                         : `${modeLabel} used. Content generated from dealer name + dealer website context.`;
                 })
                 .catch(error => {
-                    // Last-resort local client fallback for resilience.
+                    if (useAi) {
+                        document.getElementById('error-message').textContent = `Gemini generation failed: ${error.message}`;
+                        document.getElementById('error-container').style.display = 'block';
+                        statusEl.textContent = 'Gemini generation failed. No local fallback was used.';
+                        return;
+                    }
+
+                    // Local mode only: keep the offline generator as an explicit choice.
                     generationCount = nextGeneration;
                     const generated = buildSeoContent(
                         currentDealerName,
@@ -335,7 +342,7 @@
                     document.getElementById('seo-keywords').value = generated.metaKeywords;
                     updateSeoCounters();
                     document.getElementById('error-container').style.display = 'none';
-                    statusEl.textContent = `Fallback local generation used: ${error.message}`;
+                    statusEl.textContent = `Local generator used: ${error.message}`;
                 });
         };
 

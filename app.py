@@ -336,12 +336,19 @@ def _extract_json_object(value):
         return None
 
 
-def _get_gemini_api_key():
+def _get_gemini_key_diagnostics():
     env_candidates = ('GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GENAI_API_KEY')
     env_paths = [
         os.path.join(os.path.dirname(__file__), '.env'),
         os.path.join(os.getcwd(), '.env'),
     ]
+
+    diagnostics = {
+        'api_key': '',
+        'source': None,
+        'checked_paths': env_paths,
+        'present_keys': [],
+    }
 
     for path in env_paths:
         if not os.path.exists(path):
@@ -349,24 +356,43 @@ def _get_gemini_api_key():
 
         values = dotenv_values(path)
         for env_name in env_candidates:
-            value = (values.get(env_name) or os.getenv(env_name) or '').strip()
+            raw_value = values.get(env_name) or os.getenv(env_name) or ''
+            value = raw_value.strip()
+            if raw_value is not None:
+                diagnostics['present_keys'].append(env_name)
             if value:
+                diagnostics['api_key'] = value
+                diagnostics['source'] = f'{path}:{env_name}'
                 os.environ[env_name] = value
-                return value
+                return diagnostics
 
     for env_name in env_candidates:
         value = os.getenv(env_name, '').strip()
         if value:
-            return value
+            diagnostics['api_key'] = value
+            diagnostics['source'] = f'process:{env_name}'
+            return diagnostics
 
-    return ''
+    return diagnostics
+
+
+def _get_gemini_api_key():
+    return _get_gemini_key_diagnostics()['api_key']
 
 
 def generate_ai_seo_content(dealer_name, website_url, scraped_context, regenerate=False):
     """Generate SEO content using the Gemini API when configured."""
-    api_key = _get_gemini_api_key()
+    gemini_details = _get_gemini_key_diagnostics()
+    api_key = gemini_details['api_key']
     if not api_key:
-        return None, 'Gemini API key is not configured. Set GEMINI_API_KEY (or GOOGLE_API_KEY) in .env and restart the app.'
+        checked_paths = ', '.join(gemini_details['checked_paths'])
+        present_keys = ', '.join(gemini_details['present_keys']) if gemini_details['present_keys'] else 'none'
+        return None, (
+            'Gemini API key is not configured. '\
+            f'Checked files: {checked_paths}. '\
+            f'Key names present in those files: {present_keys}. '\
+            'Set GEMINI_API_KEY, GOOGLE_API_KEY, or GOOGLE_GENAI_API_KEY in the repo .env file and restart the app.'
+        )
 
     model = os.getenv('GEMINI_MODEL', 'gemini-1.5-flash').strip() or 'gemini-1.5-flash'
     style_hint = 'Create a new angle and phrasing than previous attempts.' if regenerate else 'Create a strong first draft.'
@@ -454,7 +480,7 @@ def generate_ai_seo_content(dealer_name, website_url, scraped_context, regenerat
             'meta_keywords': meta_keywords,
         }, None
     except Exception as exc:
-        return None, str(exc)
+        return None, f'Gemini request failed: {exc}'
 
 
 def get_recent_dealers_page(page, per_page):
@@ -1023,7 +1049,14 @@ def register_routes(app):
                 generated = ai_generated
                 used_mode = 'ai'
             elif requested_mode == 'ai':
-                warning = f'AI mode unavailable: {ai_error}. Falling back to local generation.'
+                return jsonify({
+                    'ok': False,
+                    'error': f'Gemini generation failed: {ai_error}',
+                    'dealer_id': dealer.id,
+                    'dealer_name': dealer.name,
+                    'website_url': scraped.get('website_url') or normalized_url,
+                    'scraped': scraped,
+                }), 502
             elif ai_error:
                 warning = f'AI fallback not used: {ai_error}'
 

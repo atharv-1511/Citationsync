@@ -381,6 +381,41 @@ def _get_gemini_api_key():
     return _get_gemini_key_diagnostics()['api_key']
 
 
+def _get_gemini_model_diagnostics():
+    env_paths = [
+        os.path.join(os.path.dirname(__file__), '.env'),
+        os.path.join(os.getcwd(), '.env'),
+    ]
+
+    diagnostics = {
+        'model': '',
+        'source': None,
+        'checked_paths': env_paths,
+    }
+
+    for path in env_paths:
+        if not os.path.exists(path):
+            continue
+
+        values = dotenv_values(path)
+        value = (values.get('GEMINI_MODEL') or '').strip()
+        if value:
+            diagnostics['model'] = value
+            diagnostics['source'] = f'{path}:GEMINI_MODEL'
+            os.environ['GEMINI_MODEL'] = value
+            return diagnostics
+
+    value = os.getenv('GEMINI_MODEL', '').strip()
+    if value:
+        diagnostics['model'] = value
+        diagnostics['source'] = 'process:GEMINI_MODEL'
+        return diagnostics
+
+    diagnostics['model'] = 'gemini-2.5-flash'
+    diagnostics['source'] = 'default:gemini-2.5-flash'
+    return diagnostics
+
+
 def generate_ai_seo_content(dealer_name, website_url, scraped_context, regenerate=False):
     """Generate SEO content using the Gemini API when configured."""
     gemini_details = _get_gemini_key_diagnostics()
@@ -395,7 +430,17 @@ def generate_ai_seo_content(dealer_name, website_url, scraped_context, regenerat
             'Set GEMINI_API_KEY, GOOGLE_API_KEY, or GOOGLE_GENAI_API_KEY in the repo .env file and restart the app.'
         )
 
-    model = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash').strip() or 'gemini-2.5-flash'
+    model_details = _get_gemini_model_diagnostics()
+    model_candidates = []
+    for candidate in [
+        model_details['model'],
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-2.0-flash',
+        'gemini-2.0-flash-lite',
+    ]:
+        if candidate and candidate not in model_candidates:
+            model_candidates.append(candidate)
     style_hint = 'Create a new angle and phrasing than previous attempts.' if regenerate else 'Create a strong first draft.'
 
     prompt = (
@@ -435,71 +480,72 @@ def generate_ai_seo_content(dealer_name, website_url, scraped_context, regenerat
         },
     }
 
-    try:
-        body = json.dumps(payload).encode('utf-8')
-        req = Request(
-            f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}',
-            data=body,
-            method='POST',
-            headers={
-                'Content-Type': 'application/json',
-            },
-        )
-        with urlopen(req, timeout=20) as response:
-            response_payload = json.loads(response.read().decode('utf-8', errors='ignore'))
+    last_error = None
 
-        content = (
-            response_payload.get('candidates', [{}])[0]
-            .get('content', {})
-            .get('parts', [{}])[0]
-            .get('text', '')
-        )
-        parsed = _extract_json_object(content)
-        if not parsed:
-            return None, 'AI response did not contain valid JSON content'
-
-        description = _trim_to_word_range(_remove_dealer_name(parsed.get('description', ''), dealer_name), 50, 80)
-        meta_description = _trim_to_length(_remove_dealer_name(parsed.get('meta_description', ''), dealer_name), 160)
-        meta_keywords = _dedupe_keywords(str(parsed.get('meta_keywords', '')).split(','), 15, 25)
-        meta_keywords = ', '.join(meta_keywords)
-        if not description or not meta_description or not meta_keywords:
-            return None, 'AI response missing required fields'
-
-        if _word_count(description) < 50:
-            description = _trim_to_word_range(
-                _remove_dealer_name(
-                    f"{description} {scraped_context.get('snippet', '')} {scraped_context.get('h1', '')}",
-                    dealer_name,
-                ),
-                50,
-                80,
-            )
-
-        return {
-            'description': description,
-            'meta_description': meta_description,
-            'meta_keywords': meta_keywords,
-        }, None
-    except HTTPError as exc:
+    for model in model_candidates:
         try:
-            error_body = exc.read().decode('utf-8', errors='ignore')
-        except Exception:
-            error_body = ''
-
-        if exc.code == 404:
-            return None, (
-                f'Gemini model "{model}" is not available for generateContent. '\
-                'Set GEMINI_MODEL=gemini-2.5-flash in .env, or leave it blank to use the default.'
+            body = json.dumps(payload).encode('utf-8')
+            req = Request(
+                f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}',
+                data=body,
+                method='POST',
+                headers={
+                    'Content-Type': 'application/json',
+                },
             )
-        if exc.code == 429:
-            return None, (
-                f'Gemini quota/rate limit reached for model "{model}". '\
-                'Wait and retry, or check your Google AI Studio billing/quota settings.'
-            )
+            with urlopen(req, timeout=20) as response:
+                response_payload = json.loads(response.read().decode('utf-8', errors='ignore'))
 
-        return None, f'Gemini request failed ({exc.code}): {error_body or exc.reason or str(exc)}'
-    except Exception as exc:
-        return None, f'Gemini request failed: {exc}'
+            content = (
+                response_payload.get('candidates', [{}])[0]
+                .get('content', {})
+                .get('parts', [{}])[0]
+                .get('text', '')
+            )
+            parsed = _extract_json_object(content)
+            if not parsed:
+                return None, f'Gemini model "{model}" returned content without valid JSON.'
+
+            description = _trim_to_word_range(_remove_dealer_name(parsed.get('description', ''), dealer_name), 50, 80)
+            meta_description = _trim_to_length(_remove_dealer_name(parsed.get('meta_description', ''), dealer_name), 160)
+            meta_keywords = _dedupe_keywords(str(parsed.get('meta_keywords', '')).split(','), 15, 25)
+            meta_keywords = ', '.join(meta_keywords)
+            if not description or not meta_description or not meta_keywords:
+                return None, f'Gemini model "{model}" returned missing required fields.'
+
+            if _word_count(description) < 50:
+                description = _trim_to_word_range(
+                    _remove_dealer_name(
+                        f"{description} {scraped_context.get('snippet', '')} {scraped_context.get('h1', '')}",
+                        dealer_name,
+                    ),
+                    50,
+                    80,
+                )
+
+            return {
+                'description': description,
+                'meta_description': meta_description,
+                'meta_keywords': meta_keywords,
+            }, None
+        except HTTPError as exc:
+            try:
+                error_body = exc.read().decode('utf-8', errors='ignore')
+            except Exception:
+                error_body = ''
+
+            if exc.code == 404:
+                last_error = f'Gemini model "{model}" is not available for generateContent.'
+                continue
+            if exc.code == 429:
+                last_error = f'Gemini quota/rate limit reached for model "{model}". {error_body or exc.reason or str(exc)}'
+                continue
+
+            return None, f'Gemini request failed ({exc.code}) for model "{model}": {error_body or exc.reason or str(exc)}'
+        except Exception as exc:
+            return None, f'Gemini request failed for model "{model}": {exc}'
+
+    return None, last_error or f'Gemini generation failed after trying models: {", ".join(model_candidates)}'
 
 
 def get_recent_dealers_page(page, per_page):

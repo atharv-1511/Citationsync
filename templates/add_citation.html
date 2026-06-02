@@ -104,6 +104,26 @@
     let currentSeoContext = null;
     let generationCount = 0;
 
+    async function fetchJsonWithDetails(url, options) {
+        const response = await fetch(url, options);
+        const responseText = await response.text();
+        let parsed = null;
+
+        try {
+            parsed = responseText ? JSON.parse(responseText) : {};
+        } catch (parseError) {
+            const snippet = responseText ? responseText.slice(0, 400) : 'Empty response body';
+            throw new Error(`HTTP ${response.status} ${response.statusText}: ${snippet}`);
+        }
+
+        if (!response.ok) {
+            const apiMessage = parsed && (parsed.error || parsed.message || parsed.detail);
+            throw new Error(apiMessage || `HTTP ${response.status} ${response.statusText}`);
+        }
+
+        return parsed;
+    }
+
     // Load all directories on page load
     document.addEventListener('DOMContentLoaded', function() {
             fetch('/api/directories', { credentials: 'same-origin' })
@@ -285,7 +305,7 @@
             const nextGeneration = generationCount + 1;
             statusEl.textContent = 'Generating SEO content...';
 
-            fetch(`/api/dealer/${dealerId}/seo-generate`, {
+            fetchJsonWithDetails(`/api/dealer/${dealerId}/seo-generate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
@@ -295,8 +315,7 @@
                     generation_count: nextGeneration,
                     mode: useAi ? 'ai' : 'local'
                 })
-            })
-                .then(response => response.json())
+                })
                 .then(data => {
                     if (!data.ok || !data.generated) {
                         throw new Error(data.error || 'Unable to generate SEO content from API');

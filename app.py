@@ -335,11 +335,19 @@ def _extract_json_object(value):
         return None
 
 
+def _get_gemini_api_key():
+    for env_name in ('GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GENAI_API_KEY'):
+        value = os.getenv(env_name, '').strip()
+        if value:
+            return value
+    return ''
+
+
 def generate_ai_seo_content(dealer_name, website_url, scraped_context, regenerate=False):
     """Generate SEO content using the Gemini API when configured."""
-    api_key = os.getenv('GEMINI_API_KEY', '').strip()
+    api_key = _get_gemini_api_key()
     if not api_key:
-        return None, 'GEMINI_API_KEY is not configured'
+        return None, 'Gemini API key is not configured. Set GEMINI_API_KEY (or GOOGLE_API_KEY) in .env and restart the app.'
 
     model = os.getenv('GEMINI_MODEL', 'gemini-1.5-flash').strip() or 'gemini-1.5-flash'
     style_hint = 'Create a new angle and phrasing than previous attempts.' if regenerate else 'Create a strong first draft.'

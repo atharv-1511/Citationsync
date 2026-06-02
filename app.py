@@ -19,6 +19,7 @@ from collections import OrderedDict
 from html import unescape
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 from dotenv import load_dotenv, dotenv_values
 
 
@@ -394,7 +395,7 @@ def generate_ai_seo_content(dealer_name, website_url, scraped_context, regenerat
             'Set GEMINI_API_KEY, GOOGLE_API_KEY, or GOOGLE_GENAI_API_KEY in the repo .env file and restart the app.'
         )
 
-    model = os.getenv('GEMINI_MODEL', 'gemini-1.5-flash').strip() or 'gemini-1.5-flash'
+    model = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash').strip() or 'gemini-2.5-flash'
     style_hint = 'Create a new angle and phrasing than previous attempts.' if regenerate else 'Create a strong first draft.'
 
     prompt = (
@@ -479,6 +480,24 @@ def generate_ai_seo_content(dealer_name, website_url, scraped_context, regenerat
             'meta_description': meta_description,
             'meta_keywords': meta_keywords,
         }, None
+    except HTTPError as exc:
+        try:
+            error_body = exc.read().decode('utf-8', errors='ignore')
+        except Exception:
+            error_body = ''
+
+        if exc.code == 404:
+            return None, (
+                f'Gemini model "{model}" is not available for generateContent. '\
+                'Set GEMINI_MODEL=gemini-2.5-flash in .env, or leave it blank to use the default.'
+            )
+        if exc.code == 429:
+            return None, (
+                f'Gemini quota/rate limit reached for model "{model}". '\
+                'Wait and retry, or check your Google AI Studio billing/quota settings.'
+            )
+
+        return None, f'Gemini request failed ({exc.code}): {error_body or exc.reason or str(exc)}'
     except Exception as exc:
         return None, f'Gemini request failed: {exc}'
 

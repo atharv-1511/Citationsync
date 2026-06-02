@@ -124,6 +124,15 @@
         return parsed;
     }
 
+    function isOfflineError(error) {
+        const message = String(error && error.message ? error.message : error || '');
+        return !navigator.onLine ||
+            message.includes('ERR_INTERNET_DISCONNECTED') ||
+            message.includes('Failed to fetch') ||
+            message.includes('NetworkError') ||
+            message.includes('Load failed');
+    }
+
     // Load all directories on page load
     document.addEventListener('DOMContentLoaded', function() {
             fetch('/api/directories', { credentials: 'same-origin' })
@@ -245,6 +254,13 @@
             return Promise.resolve(null);
         }
 
+        if (!navigator.onLine) {
+            statusEl.style.display = 'block';
+            statusEl.textContent = 'Browser appears to be offline. Gemini SEO generation requires an internet connection to reach the API and the dealer website.';
+            currentSeoContext = null;
+            return Promise.resolve(null);
+        }
+
         statusEl.style.display = 'block';
         statusEl.textContent = 'Scraping dealer website context...';
         const query = website ? `?url=${encodeURIComponent(website)}` : '';
@@ -301,6 +317,13 @@
             return;
         }
 
+        if (useAi && !navigator.onLine) {
+            document.getElementById('error-message').textContent = 'Browser/network is offline. Gemini generation requires an internet connection to reach the API and dealer website.';
+            document.getElementById('error-container').style.display = 'block';
+            statusEl.textContent = 'Gemini generation skipped because the browser is offline.';
+            return;
+        }
+
         const runGeneration = () => {
             const nextGeneration = generationCount + 1;
             statusEl.textContent = 'Generating SEO content...';
@@ -341,9 +364,16 @@
                 })
                 .catch(error => {
                     if (useAi) {
-                        document.getElementById('error-message').textContent = `Gemini generation failed: ${error.message}`;
+                        const offlineNotice = isOfflineError(error)
+                            ? 'Browser/network is offline. Gemini generation needs internet access.'
+                            : '';
+                        document.getElementById('error-message').textContent = offlineNotice
+                            ? offlineNotice
+                            : `Gemini generation failed: ${error.message}`;
                         document.getElementById('error-container').style.display = 'block';
-                        statusEl.textContent = 'Gemini generation failed. No local fallback was used.';
+                        statusEl.textContent = offlineNotice
+                            ? offlineNotice
+                            : 'Gemini generation failed. No local fallback was used.';
                         return;
                     }
 

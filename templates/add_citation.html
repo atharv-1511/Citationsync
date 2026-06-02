@@ -315,7 +315,7 @@
                         document.getElementById('dealer-website-url').value = currentDealerWebsiteUrl;
                     }
 
-                    const modeLabel = data.mode === 'ai' ? 'ChatGPT API' : 'local generator';
+                    const modeLabel = data.mode === 'ai' ? 'Gemini API' : 'local generator';
                     statusEl.textContent = data.warning
                         ? `${modeLabel} used. ${data.warning}`
                         : `${modeLabel} used. Content generated from dealer name + dealer website context.`;

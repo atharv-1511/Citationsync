@@ -336,12 +336,12 @@ def _extract_json_object(value):
 
 
 def generate_ai_seo_content(dealer_name, website_url, scraped_context, regenerate=False):
-    """Generate SEO content using OpenAI Chat Completions API when configured."""
-    api_key = os.getenv('OPENAI_API_KEY', '').strip()
+    """Generate SEO content using the Gemini API when configured."""
+    api_key = os.getenv('GEMINI_API_KEY', '').strip()
     if not api_key:
-        return None, 'OPENAI_API_KEY is not configured'
+        return None, 'GEMINI_API_KEY is not configured'
 
-    model = os.getenv('OPENAI_MODEL', 'gpt-4o-mini').strip() or 'gpt-4o-mini'
+    model = os.getenv('GEMINI_MODEL', 'gemini-1.5-flash').strip() or 'gemini-1.5-flash'
     style_hint = 'Create a new angle and phrasing than previous attempts.' if regenerate else 'Create a strong first draft.'
 
     prompt = (
@@ -362,23 +362,32 @@ def generate_ai_seo_content(dealer_name, website_url, scraped_context, regenerat
     )
 
     payload = {
-        'model': model,
-        'messages': [
-            {'role': 'system', 'content': 'You are an SEO copywriter. Return strict JSON only.'},
-            {'role': 'user', 'content': prompt},
+        'systemInstruction': {
+            'parts': [
+                {'text': 'You are an SEO copywriter. Return strict JSON only.'},
+            ],
+        },
+        'contents': [
+            {
+                'role': 'user',
+                'parts': [
+                    {'text': prompt},
+                ],
+            }
         ],
-        'temperature': 1.0,
-        'response_format': {'type': 'json_object'},
+        'generationConfig': {
+            'temperature': 1.0,
+            'responseMimeType': 'application/json',
+        },
     }
 
     try:
         body = json.dumps(payload).encode('utf-8')
         req = Request(
-            'https://api.openai.com/v1/chat/completions',
+            f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}',
             data=body,
             method='POST',
             headers={
-                'Authorization': f'Bearer {api_key}',
                 'Content-Type': 'application/json',
             },
         )
@@ -386,9 +395,10 @@ def generate_ai_seo_content(dealer_name, website_url, scraped_context, regenerat
             response_payload = json.loads(response.read().decode('utf-8', errors='ignore'))
 
         content = (
-            response_payload.get('choices', [{}])[0]
-            .get('message', {})
-            .get('content', '')
+            response_payload.get('candidates', [{}])[0]
+            .get('content', {})
+            .get('parts', [{}])[0]
+            .get('text', '')
         )
         parsed = _extract_json_object(content)
         if not parsed:
@@ -935,7 +945,7 @@ def register_routes(app):
     @app.route('/api/dealer/<dealer_id>/seo-generate', methods=['POST'])
     @login_required
     def generate_dealer_seo_content(dealer_id):
-        """Generate SEO content from dealer name + website context (optionally with ChatGPT API)."""
+        """Generate SEO content from dealer name + website context (optionally with Gemini API)."""
         dealer = Dealer.query.filter_by(id=dealer_id).first()
         if not dealer:
             return jsonify({'error': 'Dealer not found'}), 404

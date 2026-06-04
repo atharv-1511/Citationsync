@@ -336,7 +336,7 @@
                     url: currentDealerWebsiteUrl,
                     regenerate: !!isRegeneration,
                     generation_count: nextGeneration,
-                    mode: useAi ? 'ai' : 'local'
+                    mode: useAi ? 'auto' : 'local'
                 })
                 })
                 .then(data => {
@@ -357,23 +357,30 @@
                         document.getElementById('dealer-website-url').value = currentDealerWebsiteUrl;
                     }
 
-                    const modeLabel = data.mode === 'ai' ? 'Gemini API' : 'local generator';
-                    statusEl.textContent = data.warning
-                        ? `${modeLabel} used. ${data.warning}`
-                        : `${modeLabel} used. Content generated from dealer name + dealer website context.`;
+                    const modeLabel = data.mode === 'ai' ? '✅ Gemini API' : '⚠️ Local generator';
+                    if (data.warning) {
+                        statusEl.style.background = '#fff3cd';
+                        statusEl.style.color = '#856404';
+                        statusEl.textContent = `${modeLabel} used. ${data.warning}`;
+                    } else {
+                        statusEl.style.background = '#d4edda';
+                        statusEl.style.color = '#155724';
+                        statusEl.textContent = `${modeLabel} used. Content generated from dealer name + dealer website context.`;
+                    }
                 })
                 .catch(error => {
                     if (useAi) {
                         const offlineNotice = isOfflineError(error)
                             ? 'Browser/network is offline. Gemini generation needs internet access.'
                             : '';
-                        document.getElementById('error-message').textContent = offlineNotice
-                            ? offlineNotice
-                            : `Gemini generation failed: ${error.message}`;
+                        const errMsg = offlineNotice || `Gemini generation failed: ${error.message}`;
+                        document.getElementById('error-message').textContent = errMsg;
                         document.getElementById('error-container').style.display = 'block';
+                        statusEl.style.background = '#f8d7da';
+                        statusEl.style.color = '#721c24';
                         statusEl.textContent = offlineNotice
                             ? offlineNotice
-                            : 'Gemini generation failed. No local fallback was used.';
+                            : `Gemini error: ${error.message}. Visit /api/debug/gemini for full diagnostics.`;
                         return;
                     }
 

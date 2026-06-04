@@ -741,6 +741,68 @@ def create_app(config_name='development'):
 
 def register_routes(app):
     """Register all routes"""
+
+    @app.route('/api/debug/gemini')
+    @login_required
+    def debug_gemini():
+        """Diagnostic endpoint: test the configured Gemini API key and return raw details."""
+        key_diag = _get_gemini_key_diagnostics()
+        model_diag = _get_gemini_model_diagnostics()
+        api_key = key_diag['api_key']
+
+        if not api_key:
+            return jsonify({
+                'ok': False,
+                'stage': 'key_lookup',
+                'error': 'No API key found',
+                'key_diagnostics': key_diag,
+            }), 200
+
+        model = model_diag['model'] or 'gemini-2.5-flash'
+        probe_payload = json.dumps({
+            'contents': [{'role': 'user', 'parts': [{'text': 'Reply with the single word OK.'}]}],
+            'generationConfig': {'maxOutputTokens': 8},
+        }).encode('utf-8')
+
+        result = {
+            'ok': False,
+            'stage': 'api_call',
+            'key_diagnostics': key_diag,
+            'model_diagnostics': model_diag,
+            'api_key_prefix': api_key[:8] + '...' if len(api_key) > 8 else '(short)',
+            'model_used': model,
+            'http_status': None,
+            'raw_response': None,
+            'error': None,
+        }
+
+        try:
+            req = Request(
+                f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}',
+                data=probe_payload,
+                method='POST',
+                headers={'Content-Type': 'application/json'},
+            )
+            with urlopen(req, timeout=15) as resp:
+                result['http_status'] = resp.status
+                result['raw_response'] = json.loads(resp.read().decode('utf-8', errors='ignore'))
+                result['ok'] = True
+        except HTTPError as exc:
+            try:
+                body = exc.read().decode('utf-8', errors='ignore')
+            except Exception:
+                body = ''
+            result['http_status'] = exc.code
+            result['error'] = exc.reason
+            try:
+                result['raw_response'] = json.loads(body)
+            except Exception:
+                result['raw_response'] = body
+        except Exception as exc:
+            result['error'] = str(exc)
+
+        return jsonify(result), 200
+
     
     @app.route('/')
     @login_required
@@ -1117,6 +1179,8 @@ def register_routes(app):
                 return jsonify({
                     'ok': False,
                     'error': f'Gemini generation failed: {ai_error}',
+                    'ai_error': ai_error,
+                    'hint': 'Visit /api/debug/gemini for a full key + API diagnostic.',
                     'dealer_id': dealer.id,
                     'dealer_name': dealer.name,
                     'website_url': scraped.get('website_url') or normalized_url,

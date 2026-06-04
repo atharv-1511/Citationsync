@@ -34,6 +34,11 @@
             </select>
         </div>
 
+        <div class="form-group" style="margin-top:16px;">
+            <label for="notes">Notes (Optional):</label>
+            <textarea id="notes" placeholder="Add any notes about this citation" rows="3"></textarea>
+        </div>
+
         <details style="margin: 25px 0; border: 1px solid var(--border-color); border-radius: 12px; background: #f8fafd; box-shadow: 0 4px 15px rgba(0,0,0,0.02); overflow: hidden;">
             <summary style="cursor:pointer; font-weight:700; padding: 18px 20px; background: white; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; font-size: 1.05em; color: var(--primary-color);">
                 ✨ SEO Content Generator
@@ -79,14 +84,10 @@
             </div>
         </details>
 
-        <div class="form-group" style="margin-top:16px;">
-            <label for="notes">Notes (Optional):</label>
-            <textarea id="notes" placeholder="Add any notes about this citation" rows="3"></textarea>
-        </div>
-
         <button onclick="addCitation()">Add Citation</button>
     </div>
 </div>
+
 
 <div id="success-container" style="display: none;">
     <div class="alert alert-success" id="success-message"></div>
@@ -357,30 +358,26 @@
                         document.getElementById('dealer-website-url').value = currentDealerWebsiteUrl;
                     }
 
-                    const modeLabel = data.mode === 'ai' ? '✅ Gemini API' : '⚠️ Local generator';
-                    if (data.warning) {
-                        statusEl.style.background = '#fff3cd';
-                        statusEl.style.color = '#856404';
-                        statusEl.textContent = `${modeLabel} used. ${data.warning}`;
-                    } else {
+                    if (data.mode === 'ai') {
                         statusEl.style.background = '#d4edda';
                         statusEl.style.color = '#155724';
-                        statusEl.textContent = `${modeLabel} used. Content generated from dealer name + dealer website context.`;
+                        statusEl.textContent = '✅ Gemini API used. Content generated from dealer name + dealer website context.';
+                    } else {
+                        statusEl.style.background = '#fff3cd';
+                        statusEl.style.color = '#856404';
+                        statusEl.textContent = '⚠️ Local generator used. Content generated from dealer name + dealer website context.';
                     }
                 })
                 .catch(error => {
                     if (useAi) {
                         const offlineNotice = isOfflineError(error)
-                            ? 'Browser/network is offline. Gemini generation needs internet access.'
+                            ? 'Browser appears to be offline. Please check your internet connection and try again.'
                             : '';
-                        const errMsg = offlineNotice || `Gemini generation failed: ${error.message}`;
-                        document.getElementById('error-message').textContent = errMsg;
+                        document.getElementById('error-message').textContent = offlineNotice || 'SEO content generation failed. Please try again.';
                         document.getElementById('error-container').style.display = 'block';
                         statusEl.style.background = '#f8d7da';
                         statusEl.style.color = '#721c24';
-                        statusEl.textContent = offlineNotice
-                            ? offlineNotice
-                            : `Gemini error: ${error.message}. Visit /api/debug/gemini for full diagnostics.`;
+                        statusEl.textContent = offlineNotice || '❌ Generation failed. Please try again.';
                         return;
                     }
 

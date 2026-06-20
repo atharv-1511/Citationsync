@@ -1435,7 +1435,6 @@ def register_routes(app):
         })
     
     @app.route('/api/directories', methods=['GET'])
-    @login_required
     def get_directories():
         """Get list of all directories"""
         # Return active directories for UI, excluding any '.example' placeholder URLs
@@ -1453,6 +1452,128 @@ def register_routes(app):
                 'created_by': d.created_by.full_name if d.created_by else 'System'
             } for d in directories]
         })
+
+    @app.route('/api/seo/generate', methods=['POST'])
+    def generate_seo_metadata_public():
+        """Public API proxy for Gemini SEO metadata generation, used by userscript extension."""
+        data = request.get_json() or {}
+        dealer_name = data.get('name', '').strip()
+        dealer_website = data.get('website', '').strip()
+        web_context = data.get('web_context')
+
+        if not dealer_name:
+            return jsonify({'error': 'Missing name'}), 400
+
+        api_key = _get_gemini_api_key()
+        if not api_key:
+            return jsonify({'error': 'Gemini API key is not configured on the backend server.'}), 500
+
+        models = [
+            'gemini-2.5-flash',
+            'gemini-3.5-flash',
+            'gemini-2.5-flash-lite',
+            'gemini-3.1-flash-lite'
+        ]
+
+        seed = data.get('seed', random.random())
+        
+        context_string = ''
+        if web_context:
+            context_string = f"\nHere is some context scraped from the dealer's website ({dealer_website}):\n"
+            context_string += f"- Page Title: \"{web_context.get('title', '')}\"\n"
+            context_string += f"- Page Description: \"{web_context.get('metaDescription', '')}\"\n"
+            context_string += f"- Page Keywords: \"{web_context.get('metaKeywords', '')}\"\n"
+            context_string += f"- Text Snippets: \"{web_context.get('visibleTextSnippet', '')}\"\n\n"
+            context_string += "Use this website context to learn exactly what automotive brands, vehicle types (cars, trucks, SUVs), and services (maintenance, repair, financing, parts) this dealer handles, and write the description and meta keywords matching that exact context."
+
+        prompt = f"""You are an expert SEO assistant. Generate local directory listing metadata for a dealership:
+Dealer Name: {dealer_name}
+Dealer Website: {dealer_website}
+{context_string}
+
+Please output the result strictly in JSON format with three keys:
+- "description": A business description under 215 characters.
+- "metaDescription": A meta description under 215 characters.
+- "metaKeywords": A comma-separated list of 8-12 relevant meta keywords.
+
+Strictly enforce the following rules:
+
+1. Tone and Simplicity (Reference Tone Examples):
+   We want the tone to match the following examples (factual, direct list of services, including the manufacturer brand, using objective language):
+   - Example Description: "Explore new and pre-owned chevrolet cars, trucks, and SUVs with flexible financing, certified maintenance and repair services, routine vehicle care, and genuine GM OEM parts and accessories support"
+   - Example Meta Description: "Browse chevrolet cars, trucks, and SUVs with tailored financing, expert maintenance and repair services, scheduled vehicle care, and genuine GM OEM parts and accessories for dependable performance and value."
+   - Example Meta Keywords: "Chevrolet vehicles, new chevy inventory, used chevrolet cars, chevy trucks and SUVs, auto financing options, certified service center, oil change, brake repair, GM OEM parts, accessories support"
+
+   Match this tone, vocabulary level, and style, but do NOT copy the exact layout, structure, or starting words (like "Explore new and" or "Browse") every time. Vary the layouts, sentence structures, and vocabulary arrangements to ensure unique descriptions for different dealers and runs.
+
+2. Sentence structure:
+   Use basic, direct sentence formations. Keep them clean, simple, and list the actual services, vehicle types, and manufacturer brands (e.g., Ford, Chevrolet, Toyota) found in the scraped website context.
+
+3. Exclusions:
+   - Do not include the dealer's specific business name ({dealer_name}), address, or location details (like street name, city, zip, or region) anywhere in the description or meta description. Listing the car manufacturer brands (e.g. Chevrolet, Ford, Toyota) is allowed and encouraged based on the website context.
+   - Avoid salesy/marketing hooks (like "best deals", "number one", "buy now", "award-winning", "friendly", "top-quality", "experience"). Keep terms factual (e.g., "flexible financing", "certified maintenance", "expert repair").
+
+4. Character Limits:
+   - Description must be under 215 characters.
+   - Meta Description must be under 215 characters.
+
+5. Variation Generation:
+   Every time this is run, generate a different variation of description, meta description, and keywords. Seed: {seed}"""
+
+        payload = {
+            'systemInstruction': {
+                'parts': [
+                    {'text': 'You are an SEO copywriter. Return strict JSON only.'},
+                ],
+            },
+            'contents': [
+                {
+                    'role': 'user',
+                    'parts': [
+                        {'text': prompt},
+                    ],
+                }
+            ],
+            'generationConfig': {
+                'temperature': 1.0,
+                'responseMimeType': 'application/json',
+            },
+        }
+
+        last_error = None
+        for model in models:
+            try:
+                body = json.dumps(payload).encode('utf-8')
+                req = Request(
+                    f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}',
+                    data=body,
+                    method='POST',
+                    headers={
+                        'Content-Type': 'application/json',
+                    },
+                )
+                with urlopen(req, timeout=20) as response:
+                    res_json = json.loads(response.read().decode('utf-8', errors='ignore'))
+                    
+                content = (
+                    res_json.get('candidates', [{}])[0]
+                    .get('content', {})
+                    .get('parts', [{}])[0]
+                    .get('text', '')
+                )
+                
+                parsed = _extract_json_object(content)
+                if parsed:
+                    res_data = {
+                        'description': parsed.get('description', ''),
+                        'metaDescription': parsed.get('metaDescription') or parsed.get('meta_description') or '',
+                        'metaKeywords': parsed.get('metaKeywords') or parsed.get('meta_keywords') or ''
+                    }
+                    return jsonify({'ok': True, 'generated': res_data}), 200
+            except Exception as e:
+                last_error = str(e)
+                
+        return jsonify({'error': f'All fallback models failed. Last error: {last_error}'}), 502
 
 
     @app.route('/api/activities', methods=['GET'])

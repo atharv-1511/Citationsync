@@ -1470,9 +1470,9 @@ def register_routes(app):
 
         models = [
             'gemini-2.5-flash',
-            'gemini-3.5-flash',
-            'gemini-2.5-flash-lite',
-            'gemini-3.1-flash-lite'
+            'gemini-2.5-flash-lite-preview-06-17',
+            'gemini-2.0-flash',
+            'gemini-1.5-flash'
         ]
 
         seed = data.get('seed', random.random())
@@ -1564,9 +1564,16 @@ Strictly enforce the following rules:
                 
                 parsed = _extract_json_object(content)
                 if parsed:
+                    desc = parsed.get('description', '')
+                    meta_desc = parsed.get('metaDescription') or parsed.get('meta_description') or ''
+                    # Enforce 215-character hard limit
+                    if len(desc) > 215:
+                        desc = desc[:212].rsplit(' ', 1)[0].rstrip(',;') + '...'
+                    if len(meta_desc) > 215:
+                        meta_desc = meta_desc[:212].rsplit(' ', 1)[0].rstrip(',;') + '...'
                     res_data = {
-                        'description': parsed.get('description', ''),
-                        'metaDescription': parsed.get('metaDescription') or parsed.get('meta_description') or '',
+                        'description': desc,
+                        'metaDescription': meta_desc,
                         'metaKeywords': parsed.get('metaKeywords') or parsed.get('meta_keywords') or ''
                     }
                     return jsonify({'ok': True, 'generated': res_data}), 200
